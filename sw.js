@@ -1,7 +1,7 @@
-const CACHE_NAME = 'pingpong-swing-v1';
+const CACHE_NAME = 'pingpong-swing-v2';
 const ASSETS_TO_CACHE = [
-  'index.html',
-  'manifest.json'
+  '/tt_visualization/',
+  '/tt_visualization/manifest.json'
 ];
 
 // インストール時に必要なファイルをキャッシュ
