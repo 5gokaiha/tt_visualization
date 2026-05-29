@@ -27,6 +27,13 @@
         .row { display: flex; align-items: center; gap: 8px; }
         .flex-1 { flex: 1; }
 
+        /* --- カラー定義 --- */
+        :root {
+            --color-fh: #ff4757; /* フォアハンドの赤 */
+            --color-bh: #1e90ff; /* バックハンドの青 */
+            --color-default: #d63031; /* デフォルトの赤 */
+        }
+
         /* --- UI部品 --- */
         select, button, input[type="range"] { padding: 4px 8px; font-size: 12px; border: 1px solid #ccc; border-radius: 4px; }
         button { cursor: pointer; color: white; border: none; background: #6c757d; transition: 0.1s; }
@@ -46,24 +53,35 @@
         /* --- インジケーター (左) --- */
         #swing-indicators { display: flex; gap: 10px; }
         .indicator { flex: 1; text-align: center; padding: 12px; font-size: 1.4em; font-weight: bold; background: #e0e0e0; color: #aaa; border-radius: 6px; transition: all 0.1s; }
-        .indicator.fh-active { background: #ff4757; color: white; transform: scale(1.02); box-shadow: 0 0 15px #ff4757; }
-        .indicator.bh-active { background: #1e90ff; color: white; transform: scale(1.02); box-shadow: 0 0 15px #1e90ff; }
+        .indicator.fh-active { background: var(--color-fh); color: white; transform: scale(1.02); box-shadow: 0 0 15px var(--color-fh); }
+        .indicator.bh-active { background: var(--color-bh); color: white; transform: scale(1.02); box-shadow: 0 0 15px var(--color-bh); }
         
-        /* --- インパクト統計 (左) --- */
-        .impact-stats { display: flex; flex-direction: column; gap: 8px; background: #eef; padding: 10px; border-radius: 6px; border: 1px solid #ccd; flex: 1; justify-content: center; }
-        .stat-row { display: grid; grid-template-columns: 80px 1fr; align-items: center; gap: 10px; }
-        .stat-label { font-weight: bold; color: #495057; font-size: 12px;}
-        .stat-value { display: flex; align-items: center; gap: 5px; }
-        .stat-box { font-family: monospace; font-size: 16px; color: #d63031; font-weight: bold; }
+        /* --- インパクト統計 (左：巨大化・強調版) --- */
+        .impact-stats { display: flex; flex-direction: column; gap: 12px; background: #eef; padding: 15px; border-radius: 6px; border: 1px solid #ccd; flex: 1; justify-content: center; }
+        .stat-row { display: grid; grid-template-columns: 85px 1fr; align-items: center; gap: 15px; }
+        .stat-label { font-weight: bold; color: #495057; font-size: 14px;}
+        .stat-value { display: flex; align-items: center; gap: 10px; }
+        
+        /* 数値ボックス */
+        .stat-box { font-family: monospace; font-size: 24px; color: #777; font-weight: bold; background: white; padding: 6px 12px; border-radius: 6px; border: 2px solid #ddd; min-width: 70px; text-align: right; transition: color 0.2s, border-color 0.2s; }
+        
+        /* 直前の打球面 専用のスタイル */
+        #peakFace { font-size: 26px; min-width: auto; text-align: center; }
 
-        /* -- 加速度バー -- */
-        .bar-container { flex: 1; height: 12px; background-color: #ddd; border-radius: 6px; overflow: hidden; }
-        .bar { height: 100%; width: 0%; background-color: #d63031; transition: width 0.2s; }
+        /* FH/BH判定による動的カラー付与用クラス */
+        .color-fh { color: var(--color-fh) !important; border-color: var(--color-fh) !important; }
+        .color-bh { color: var(--color-bh) !important; border-color: var(--color-bh) !important; }
+        .bg-color-fh { background-color: var(--color-fh) !important; }
+        .bg-color-bh { background-color: var(--color-bh) !important; }
+
+        /* -- 加速度バー (太く) -- */
+        .bar-container { flex: 1; height: 18px; background-color: #ddd; border-radius: 9px; overflow: hidden; }
+        .bar { height: 100%; width: 0%; background-color: #777; transition: width 0.2s, background-color 0.2s; }
         
-        /* -- 傾斜角度メーター -- */
-        .gauge-container { position: relative; width: 60px; height: 30px; overflow: hidden; }
-        .gauge-bg { width: 100%; height: 60px; background: conic-gradient(from -90deg, #ccc 0deg 180deg, transparent 180deg 360deg); border-radius: 60px 60px 0 0; }
-        .gauge-needle { position: absolute; bottom: 0; left: 50%; width: 2px; height: 28px; background: #333; transform-origin: bottom center; transition: transform 0.2s; transform: translateX(-50%) rotate(0deg); }
+        /* -- 傾斜角度メーター (大きく) -- */
+        .gauge-container { position: relative; width: 80px; height: 40px; overflow: hidden; }
+        .gauge-bg { width: 100%; height: 80px; background: conic-gradient(from -90deg, #ccc 0deg 180deg, transparent 180deg 360deg); border-radius: 80px 80px 0 0; }
+        .gauge-needle { position: absolute; bottom: 0; left: 50%; width: 3px; height: 38px; background: #777; transform-origin: bottom center; transition: transform 0.2s, background-color 0.2s; transform: translateX(-50%) rotate(0deg); }
 
         /* --- 履歴 (中央) & 生データ (右) --- */
         .history-title, .live-data-title { font-weight: bold; margin-bottom: 8px; font-size: 12px; color: #555; border-bottom: 1px solid #eee; padding-bottom: 4px; }
@@ -71,13 +89,13 @@
         .history-list, #live-data-container { flex: 1; overflow-y: auto; }
         .history-list { display: flex; flex-direction: column; gap: 4px; padding-right: 4px; }
         .history-item { background: white; border: 1px solid #ccc; border-radius: 4px; padding: 6px 8px; display: flex; justify-content: space-between; align-items: center; font-size: 11px; }
-        .history-item.fh { border-left: 4px solid #ff4757; }
-        .history-item.bh { border-left: 4px solid #1e90ff; }
+        .history-item.fh { border-left: 4px solid var(--color-fh); }
+        .history-item.bh { border-left: 4px solid var(--color-bh); }
         .history-time, .history-type, .history-val { font-family: monospace; }
         .history-time { color: #888; }
         .history-type { font-weight: bold; }
-        .history-type.fh { color: #ff4757; }
-        .history-type.bh { color: #1e90ff; }
+        .history-type.fh { color: var(--color-fh); }
+        .history-type.bh { color: var(--color-bh); }
         .data-item { display: flex; justify-content: space-between; font-family: monospace; font-size: 12px; margin-bottom: 4px; border-bottom: 1px dashed #444; padding-bottom: 2px;}
         .data-item:last-child { border-bottom: none; }
         ::-webkit-scrollbar { width: 6px; }
@@ -111,12 +129,23 @@
                         <label class="stat-label" style="font-size: 12px;">判定閾値: <span id="thresholdVal">3.0</span>g</label>
                         <input type="range" id="thresholdSlider" min="1.0" max="15.0" step="0.1" value="3.0" class="flex-1">
                     </div>
+                    
                     <div id="swing-indicators">
                         <div id="fh-indicator" class="indicator">FH</div>
                         <div id="bh-indicator" class="indicator">BH</div>
                     </div>
+                    
+                    <!-- 強化されたインパクトUI -->
                     <div class="impact-stats">
-                        <div class="history-title" style="margin-bottom: 12px;">最新のインパクト</div>
+                        <div class="history-title" style="margin-bottom: 5px;">最新のインパクト</div>
+                        
+                        <div class="stat-row">
+                            <span class="stat-label">直前の打球:</span>
+                            <div class="stat-value">
+                                <span class="stat-box" id="peakFace">--</span>
+                            </div>
+                        </div>
+
                         <div class="stat-row">
                             <span class="stat-label">最大加速度:</span>
                             <div class="stat-value">
@@ -124,6 +153,7 @@
                                 <div class="bar-container"><div id="peakAccBar" class="bar"></div></div>
                             </div>
                         </div>
+                        
                         <div class="stat-row">
                             <span class="stat-label">傾斜角度:</span>
                              <div class="stat-value">
@@ -136,11 +166,13 @@
                         </div>
                     </div>
                 </div>
+                
                 <!-- 中央 -->
                 <div class="vis-center">
                     <div class="history-title">検出履歴 (History)</div>
                     <div class="history-list" id="history-list"></div>
                 </div>
+                
                 <!-- 右側 -->
                 <div class="vis-right">
                     <div class="live-data-title">生データ (Live)</div>
@@ -165,7 +197,12 @@
             const historyList = document.getElementById('history-list');
             const thresholdSlider = document.getElementById('thresholdSlider');
             const thresholdVal = document.getElementById('thresholdVal');
+            
+            // 強調UI要素群
+            const peakFaceBox = document.getElementById('peakFace');
+            const peakAccBox = document.getElementById('peakAccAmount');
             const peakAccBar = document.getElementById('peakAccBar');
+            const peakTiltBox = document.getElementById('peakTiltAngle');
             const tiltNeedle = document.getElementById('tiltNeedle');
 
             function log(message) {
@@ -206,7 +243,7 @@
                 if(notifyCharacteristic) notifyCharacteristic.removeEventListener('characteristicvaluechanged', onDataReceived);
             }
 
-            // --- データ受信・解析処理 (Python -> JS移植) ---
+            // --- データ受信・解析処理 ---
             function onDataReceived(event) {
                 const newBytes = new Uint8Array(event.target.value.buffer);
                 for (const byte of newBytes) {
@@ -237,14 +274,30 @@
             let currentThreshold = parseFloat(thresholdSlider.value);
             let isCooldown = false, isSwinging = false;
             let peakTotalAcc = 0, peakAngX = 0;
+
             thresholdSlider.addEventListener('input', (e) => {
                 currentThreshold = parseFloat(e.target.value);
                 thresholdVal.textContent = currentThreshold.toFixed(1);
             });
 
+            // UIの色をリセット・更新するヘルパー関数
+            function applyUiColor(type) {
+                const isFH = type === "FH";
+                const isBH = type === "BH";
+                
+                // クラスの付け外しで色を制御
+                peakFaceBox.className = `stat-box ${isFH ? 'color-fh' : isBH ? 'color-bh' : ''}`;
+                peakAccBox.className = `stat-box ${isFH ? 'color-fh' : isBH ? 'color-bh' : ''}`;
+                peakTiltBox.className = `stat-box ${isFH ? 'color-fh' : isBH ? 'color-bh' : ''}`;
+                
+                peakAccBar.className = `bar ${isFH ? 'bg-color-fh' : isBH ? 'bg-color-bh' : ''}`;
+                tiltNeedle.className = `gauge-needle ${isFH ? 'bg-color-fh' : isBH ? 'bg-color-bh' : ''}`;
+            }
+
             function processSwingData(data) {
                 const totalAcc = Math.sqrt(data.AccX**2 + data.AccY**2 + data.AccZ**2);
                 if (isCooldown) return;
+                
                 if (!isSwinging) {
                     if (totalAcc > currentThreshold) {
                         isSwinging = true;
@@ -262,6 +315,8 @@
                             const accStr = peakTotalAcc.toFixed(2);
                             let tiltAngle = 0;
                             let swingType = "";
+                            
+                            // 判定
                             if (peakAngX > 0) {
                                 tiltAngle = 90 - peakAngX;
                                 swingType = "FH";
@@ -272,12 +327,21 @@
                             tiltAngle = Math.max(0, Math.min(90, tiltAngle));
                             const tiltStr = tiltAngle.toFixed(0);
                             
-                            // UI更新
+                            // --- 最新インパクトUIの更新 ---
                             flashIndicator(swingType.toLowerCase());
-                            document.getElementById('peakAccAmount').textContent = accStr;
-                            document.getElementById('peakTiltAngle').textContent = tiltStr;
+                            
+                            // 文字と色の更新
+                            peakFaceBox.textContent = swingType;
+                            applyUiColor(swingType);
+                            
+                            peakAccBox.textContent = accStr;
+                            peakTiltBox.textContent = tiltStr;
+                            
+                            // バーとメーターの更新
                             peakAccBar.style.width = `${Math.min(peakTotalAcc / 16 * 100, 100)}%`;
                             tiltNeedle.style.transform = `translateX(-50%) rotate(${tiltAngle - 90}deg)`;
+                            
+                            // 履歴追加
                             addHistory(swingType, accStr, tiltStr);
 
                             isCooldown = true;
