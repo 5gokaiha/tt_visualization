@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>卓球スイング判定 (Android版)</title>
+    <!-- 先ほどのCSSスタイルをここにコピー -->
+    <style>
+        /* (PC版のCSSをそのまま貼り付け) */
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="panel">
+            <h2>Android 接続コントロール</h2>
+            <div class="row">
+                <!-- Web Bluetoothはブラウザセキュリティ上、ボタンを押した時しかスキャンできません -->
+                <button id="connectBtn" class="primary">センサーに接続する</button>
+                <button id="disconnectBtn">切断</button>
+            </div>
+        </div>
+        
+        <!-- 以下、先ほどの判定UI、履歴UI、データUIをそのまま配置 -->
+    </div>
+
+    <script>
+        const connectBtn = document.getElementById('connectBtn');
+        const disconnectBtn = document.getElementById('disconnectBtn');
+        let bluetoothDevice = null;
+        let characteristic = null;
+
+        // 1. ボタンタップ時にスマホのBluetoothスキャン画面を呼び出す
+        connectBtn.addEventListener('click', async () => {
+            try {
+                console.log('Bluetoothデバイスをスキャン中...');
+                // 接続したいBLEデバイスのサービスUUIDを指定
+                bluetoothDevice = await navigator.bluetooth.requestDevice({
+                    acceptAllDevices: true, // または filters: [{ namePrefix: 'MyBleDevice' }]
+                    optionalServices: ['ジェネリックアクセスや、ラケットセンサー固有のサービスUUID']
+                });
+
+                console.log('接続中: ' + bluetoothDevice.name);
+                const server = await bluetoothDevice.gatt.connect();
+                
+                // 2. センサーデータが流れてくるCharacteristic（特性）を取得して通知(Notification)を開始
+                const service = await server.getPrimaryService('サービスUUID');
+                characteristic = await service.getCharacteristic('キャラクタリスティックUUID');
+                
+                await characteristic.startNotifications();
+                characteristic.addEventListener('characteristicvaluechanged', handleDataChanged);
+                console.log('接続完了。センサーデータの受信を開始しました。');
+
+            } catch (error) {
+                console.error('接続エラー:', error);
+            }
+        });
+
+        // 3. データを受信したときの処理（ここでこれまでの判定ロジックを動かす）
+        function handleDataChanged(event) {
+            const value = event.target.value;
+            // バイトデータを解析して、AccX, AccY, AccZ, AngX を復元する
+            // (device_model.py の struct.unpack と同じ解析をJSの DataView で行います)
+            const dataView = new DataView(value.buffer);
+            
+            // 例: センサーがショート型の整数で14バイト送ってくる場合のJS側パース処理
+            const data = {
+                AccX: dataView.getInt16(0, true) / 32768.0 * 16.0, // センサー仕様に合わせる
+                AccY: dataView.getInt16(2, true) / 32768.0 * 16.0,
+                AccZ: dataView.getInt16(4, true) / 32768.0 * 16.0,
+                AngX: dataView.getInt16(6, true) / 32768.0 * 180.0
+            };
+
+            // あとはPC版で作ったスイング判定・履歴追加ロジックにそのまま流し込むだけ！
+            processSensorData(data); 
+        }
+    </script>
+</body>
+</html>
