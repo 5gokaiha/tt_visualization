@@ -109,16 +109,15 @@
             // --- グローバル変数 ---
             let device = null;
             let notifyCharacteristic = null;
+            let dataBuffer = []; // PythonのTempBytesの代わり
             const SERVICE_UUID = "0000ffe5-0000-1000-8000-00805f9a34fb";
             const NOTIFY_UUID = "0000ffe4-0000-1000-8000-00805f9a34fb";
-            const WRITE_UUID = "0000ffe9-0000-1000-8000-00805f9a34fb";
 
             // --- UI要素 ---
             const connectBtn = document.getElementById('connectBtn');
             const disconnectBtn = document.getElementById('disconnectBtn');
             const statusText = document.getElementById('statusText');
             const logPanel = document.getElementById('log-panel');
-            // ... (他のUI要素も同様に取得)
             const historyList = document.getElementById('history-list');
             const thresholdSlider = document.getElementById('thresholdSlider');
             const thresholdVal = document.getElementById('thresholdVal');
@@ -157,22 +156,21 @@
 
                     log("通知(Notification)を開始します...");
                     await notifyCharacteristic.startNotifications();
-                    notifyCharacteristic.addEventListener('characteristicvaluechanged', handleNotifications);
+                    notifyCharacteristic.addEventListener('characteristicvaluechanged', onDataReceived);
                     
                     statusText.textContent = "接続完了";
                     log("接続成功！データの受信待機中...");
 
                 } catch(error) {
                     log(`エラー: ${error.message}`);
-                    if (device) device.gatt.disconnect();
+                    if (device && device.gatt) device.gatt.disconnect();
                 }
             });
 
             // --- 切断処理 ---
             disconnectBtn.addEventListener('click', () => {
                 if (!device || !device.gatt.connected) {
-                    log("切断済みです。");
-                    return;
+                    log("切断済みです。"); return;
                 }
                 log("切断します...");
                 device.gatt.disconnect();
@@ -181,35 +179,55 @@
             function onDisconnected() {
                 log("デバイスとの接続が切れました。");
                 statusText.textContent = "未接続";
-                notifyCharacteristic.removeEventListener('characteristicvaluechanged', handleNotifications);
-            }
-
-            // --- データ受信処理 ---
-            function handleNotifications(event) {
-                const value = event.target.value;
-                // --- ここに、以前の`device_model.py`のデータ解析ロジックをJSで再現 ---
-                // Python: struct.unpack('<hhhhhhhhh', Bytes)
-                // JS:     DataViewで18バイトを9個のshort(16bit)として読む
-                const dataView = new DataView(value.buffer);
-                
-                // TempBytesの先頭2バイト(0x55, 0x61)はBLE通知では送られてこないことが多いので、
-                // 18バイトのデータが直接来ると仮定して解析します。
-                if (value.byteLength >= 18) {
-                     const data = {
-                        AccX: dataView.getInt16(0, true) / 32768 * 16,
-                        AccY: dataView.getInt16(2, true) / 32768 * 16,
-                        AccZ: dataView.getInt16(4, true) / 32768 * 16,
-                        AsX:  dataView.getInt16(6, true) / 32768 * 2000,
-                        AsY:  dataView.getInt16(8, true) / 32768 * 2000,
-                        AsZ:  dataView.getInt16(10, true) / 32768 * 2000,
-                        AngX: dataView.getInt16(12, true) / 32768 * 180,
-                        AngY: dataView.getInt16(14, true) / 32768 * 180,
-                        AngZ: dataView.getInt16(16, true) / 32768 * 180,
-                    };
-                    processSwingData(data); // 解析データをスイング判定ロジックへ
-                    updateLiveDataUI(data);
+                if(notifyCharacteristic) {
+                    notifyCharacteristic.removeEventListener('characteristicvaluechanged', onDataReceived);
                 }
             }
+
+            // --- データ受信・バッファリング処理 (onDataReceived from Python) ---
+            function onDataReceived(event) {
+                const value = event.target.value; // DataView
+                const newBytes = new Uint8Array(value.buffer);
+                
+                for (const byte of newBytes) {
+                    dataBuffer.push(byte);
+
+                    // バッファの先頭がヘッダ(0x55, 0x61)でなければ、先頭を削除して同期を試みる
+                    while (dataBuffer.length >= 2 && (dataBuffer[0] !== 0x55 || dataBuffer[1] !== 0x61)) {
+                        dataBuffer.shift(); // 配列の先頭を削除
+                    }
+
+                    // ヘッダを含む20バイトのパケットが揃ったら処理
+                    if (dataBuffer.length >= 20) {
+                        const packet = dataBuffer.slice(0, 20); // 20バイトをコピー
+                        dataBuffer.splice(0, 20); // 処理した20バイトをバッファから削除
+                        
+                        // ヘッダ(2バイト)を除いた18バイトのペイロードを解析へ
+                        processData(packet.slice(2)); 
+                    }
+                }
+            }
+
+            // --- データ解析処理 (processData from Python) ---
+            function processData(bytes) { // 18バイトのUint8Arrayを受け取る
+                // JavaScriptのDataViewでリトルエンディアンの16ビット符号付き整数として読む
+                const dataView = new DataView(new Uint8Array(bytes).buffer);
+
+                const data = {
+                    AccX: dataView.getInt16(0, true) / 32768 * 16,
+                    AccY: dataView.getInt16(2, true) / 32768 * 16,
+                    AccZ: dataView.getInt16(4, true) / 32768 * 16,
+                    AsX:  dataView.getInt16(6, true) / 32768 * 2000,
+                    AsY:  dataView.getInt16(8, true) / 32768 * 2000,
+                    AsZ:  dataView.getInt16(10, true) / 32768 * 2000,
+                    AngX: dataView.getInt16(12, true) / 32768 * 180,
+                    AngY: dataView.getInt16(14, true) / 32768 * 180,
+                    AngZ: dataView.getInt16(16, true) / 32768 * 180,
+                };
+                processSwingData(data); // 解析データをスイング判定ロジックへ
+                updateLiveDataUI(data);
+            }
+
 
             // --- スイング判定ロジック (以前の安定版) ---
             let currentThreshold = parseFloat(thresholdSlider.value);
