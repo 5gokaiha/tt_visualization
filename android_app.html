@@ -4,75 +4,309 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>卓球スイング判定 (Android版)</title>
-    <!-- 先ほどのCSSスタイルをここにコピー -->
+    <!-- 以前のCSSスタイルをここにコピー -->
     <style>
-        /* (PC版のCSSをそのまま貼り付け) */
+        body { font-family: sans-serif; background-color: #f0f2f5; margin: 10px; font-size: 13px; color: #333; }
+        .container { max-width: 900px; margin: 0 auto; display: flex; flex-direction: column; gap: 10px; }
+        .panel { background: white; padding: 12px 15px; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        h2 { font-size: 14px; margin: 0 0 10px 0; color: #444; border-bottom: 2px solid #eee; padding-bottom: 5px; }
+        .row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+        .flex-1 { flex: 1; }
+        select, button, input[type="range"] { padding: 4px 8px; font-size: 12px; border: 1px solid #ccc; border-radius: 4px; }
+        button { cursor: pointer; color: white; border: none; background: #6c757d; transition: 0.1s; }
+        button:hover { opacity: 0.8; }
+        button.primary { background: #007bff; font-weight: bold; }
+        .status-badge { background: #e9ecef; padding: 3px 6px; border-radius: 4px; font-weight: bold; font-size: 11px; }
+        .vis-layout { display: flex; gap: 15px; align-items: stretch; height: 350px; }
+        .vis-left { flex: 2; display: flex; flex-direction: column; gap: 10px; min-width: 250px; }
+        .vis-center { flex: 2; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 6px; padding: 8px; display: flex; flex-direction: column; min-width: 280px; }
+        .vis-right { flex: 1; background: #272822; padding: 10px; border-radius: 6px; color: #a6e22e; min-width: 150px; display: flex; flex-direction: column; }
+        #swing-indicators { display: flex; gap: 10px; }
+        .indicator { flex: 1; text-align: center; padding: 12px; font-size: 1.4em; font-weight: bold; background: #e0e0e0; color: #aaa; border-radius: 6px; transition: all 0.1s; }
+        .indicator.fh-active { background: #ff4757; color: white; transform: scale(1.02); box-shadow: 0 0 15px #ff4757; }
+        .indicator.bh-active { background: #1e90ff; color: white; transform: scale(1.02); box-shadow: 0 0 15px #1e90ff; }
+        .impact-stats { display: flex; flex-direction: column; gap: 8px; background: #eef; padding: 10px; border-radius: 6px; border: 1px solid #ccd; flex: 1; justify-content: center; }
+        .stat-row { display: flex; justify-content: space-between; align-items: center; }
+        .stat-label { font-weight: bold; color: #495057; }
+        .stat-box { font-family: monospace; font-size: 16px; background: white; padding: 4px 8px; border-radius: 4px; border: 1px solid #ddd; color: #d63031; font-weight: bold; min-width: 60px; text-align: right; }
+        .history-title { font-weight: bold; margin-bottom: 8px; font-size: 12px; color: #555; }
+        .history-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; padding-right: 4px; }
+        .history-item { background: white; border: 1px solid #ccc; border-radius: 4px; padding: 6px 8px; display: flex; justify-content: space-between; align-items: center; font-size: 11px; }
+        .history-item.fh { border-left: 4px solid #ff4757; }
+        .history-item.bh { border-left: 4px solid #1e90ff; }
+        .history-time { color: #888; width: 55px; }
+        .history-type { font-weight: bold; width: 30px; text-align: center; }
+        .history-type.fh { color: #ff4757; }
+        .history-type.bh { color: #1e90ff; }
+        .history-val { font-family: monospace; }
+        .live-data-title { font-size: 11px; color: #fff; margin-bottom: 8px; border-bottom: 1px solid #555; padding-bottom: 4px; }
+        #live-data-container { flex: 1; overflow-y: auto; }
+        .data-item { display: flex; justify-content: space-between; font-family: monospace; font-size: 12px; margin-bottom: 4px; border-bottom: 1px dashed #444; padding-bottom: 2px;}
+        .data-item:last-child { border-bottom: none; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: #ccc; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #999; }
+        .log-panel { margin-top: 10px; background: #333; color: #eee; padding: 10px; font-family: monospace; height: 100px; overflow-y: auto; font-size: 11px; border-radius: 4px;}
     </style>
 </head>
 <body>
     <div class="container">
+        <!-- 接続UI -->
         <div class="panel">
-            <h2>Android 接続コントロール</h2>
+             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <h2 style="margin: 0; border: none;">接続コントロール</h2>
+                <span id="statusText" class="status-badge">未接続</span>
+            </div>
             <div class="row">
-                <!-- Web Bluetoothはブラウザセキュリティ上、ボタンを押した時しかスキャンできません -->
-                <button id="connectBtn" class="primary">センサーに接続する</button>
-                <button id="disconnectBtn">切断</button>
+                <button id="connectBtn" class="primary">① センサーに接続</button>
+                <button id="disconnectBtn">② 切断</button>
             </div>
         </div>
-        
-        <!-- 以下、先ほどの判定UI、履歴UI、データUIをそのまま配置 -->
+
+        <!-- 可視化UI -->
+        <div class="panel">
+            <h2>スイング判定・可視化</h2>
+            <div class="vis-layout">
+                <!-- 左側、中央、右側のUI... (HTMLは変更なし) -->
+                <div class="vis-left">
+                    <div class="row" style="background: #eef; padding: 8px; border-radius: 4px; margin: 0;">
+                        <label style="font-weight: bold; font-size: 12px;">判定閾値: <span id="thresholdVal">3.0</span>g</label>
+                        <input type="range" id="thresholdSlider" min="1.0" max="15.0" step="0.1" value="3.0" class="flex-1">
+                    </div>
+                    <div id="swing-indicators">
+                        <div id="fh-indicator" class="indicator">FH</div>
+                        <div id="bh-indicator" class="indicator">BH</div>
+                    </div>
+                    <div class="impact-stats">
+                        <div class="history-title">最新のインパクト</div>
+                        <div class="stat-row">
+                            <span class="stat-label">最大加速度:</span>
+                            <span><span class="stat-box" id="peakAccAmount">0.00</span> g</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">傾斜角度:</span>
+                            <span><span class="stat-box" id="peakTiltAngle">0</span> °</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="vis-center">
+                    <div class="history-title">検出履歴 (History)</div>
+                    <div class="history-list" id="history-list"></div>
+                </div>
+                <div class="vis-right">
+                    <div class="live-data-title">生データ (Live)</div>
+                    <div id="live-data-container" style="color:#aaa; font-size:11px;">待機中...</div>
+                </div>
+            </div>
+        </div>
+        <!-- デバッグログ -->
+        <div class="log-panel" id="log-panel"></div>
     </div>
 
     <script>
-        const connectBtn = document.getElementById('connectBtn');
-        const disconnectBtn = document.getElementById('disconnectBtn');
-        let bluetoothDevice = null;
-        let characteristic = null;
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- グローバル変数 ---
+            let device = null;
+            let notifyCharacteristic = null;
+            const SERVICE_UUID = "0000ffe5-0000-1000-8000-00805f9a34fb";
+            const NOTIFY_UUID = "0000ffe4-0000-1000-8000-00805f9a34fb";
+            const WRITE_UUID = "0000ffe9-0000-1000-8000-00805f9a34fb";
 
-        // 1. ボタンタップ時にスマホのBluetoothスキャン画面を呼び出す
-        connectBtn.addEventListener('click', async () => {
-            try {
-                console.log('Bluetoothデバイスをスキャン中...');
-                // 接続したいBLEデバイスのサービスUUIDを指定
-                bluetoothDevice = await navigator.bluetooth.requestDevice({
-                    acceptAllDevices: true, // または filters: [{ namePrefix: 'MyBleDevice' }]
-                    optionalServices: ['ジェネリックアクセスや、ラケットセンサー固有のサービスUUID']
-                });
+            // --- UI要素 ---
+            const connectBtn = document.getElementById('connectBtn');
+            const disconnectBtn = document.getElementById('disconnectBtn');
+            const statusText = document.getElementById('statusText');
+            const logPanel = document.getElementById('log-panel');
+            // ... (他のUI要素も同様に取得)
+            const historyList = document.getElementById('history-list');
+            const thresholdSlider = document.getElementById('thresholdSlider');
+            const thresholdVal = document.getElementById('thresholdVal');
+            
+            function log(message) {
+                console.log(message);
+                logPanel.innerHTML = `[${new Date().toLocaleTimeString()}] ${message}<br>` + logPanel.innerHTML;
+            }
 
-                console.log('接続中: ' + bluetoothDevice.name);
-                const server = await bluetoothDevice.gatt.connect();
+            // --- 接続処理 ---
+            connectBtn.addEventListener('click', async () => {
+                log("接続ボタンが押されました。");
+                if (!navigator.bluetooth) {
+                    log("エラー: このブラウザはWeb Bluetoothをサポートしていません。");
+                    return;
+                }
+
+                try {
+                    log("デバイスを検索中... (デバイス名に 'WT' を含むものを探します)");
+                    device = await navigator.bluetooth.requestDevice({
+                        filters: [{ namePrefix: 'WT' }],
+                        optionalServices: [SERVICE_UUID]
+                    });
+                    
+                    log(`デバイスを選択: ${device.name}`);
+                    device.addEventListener('gattserverdisconnected', onDisconnected);
+                    
+                    log("GATTサーバーに接続中...");
+                    const server = await device.gatt.connect();
+
+                    log("サービスを取得中...");
+                    const service = await server.getPrimaryService(SERVICE_UUID);
+
+                    log("キャラクタリスティック(Notify)を取得中...");
+                    notifyCharacteristic = await service.getCharacteristic(NOTIFY_UUID);
+
+                    log("通知(Notification)を開始します...");
+                    await notifyCharacteristic.startNotifications();
+                    notifyCharacteristic.addEventListener('characteristicvaluechanged', handleNotifications);
+                    
+                    statusText.textContent = "接続完了";
+                    log("接続成功！データの受信待機中...");
+
+                } catch(error) {
+                    log(`エラー: ${error.message}`);
+                    if (device) device.gatt.disconnect();
+                }
+            });
+
+            // --- 切断処理 ---
+            disconnectBtn.addEventListener('click', () => {
+                if (!device || !device.gatt.connected) {
+                    log("切断済みです。");
+                    return;
+                }
+                log("切断します...");
+                device.gatt.disconnect();
+            });
+
+            function onDisconnected() {
+                log("デバイスとの接続が切れました。");
+                statusText.textContent = "未接続";
+                notifyCharacteristic.removeEventListener('characteristicvaluechanged', handleNotifications);
+            }
+
+            // --- データ受信処理 ---
+            function handleNotifications(event) {
+                const value = event.target.value;
+                // --- ここに、以前の`device_model.py`のデータ解析ロジックをJSで再現 ---
+                // Python: struct.unpack('<hhhhhhhhh', Bytes)
+                // JS:     DataViewで18バイトを9個のshort(16bit)として読む
+                const dataView = new DataView(value.buffer);
                 
-                // 2. センサーデータが流れてくるCharacteristic（特性）を取得して通知(Notification)を開始
-                const service = await server.getPrimaryService('サービスUUID');
-                characteristic = await service.getCharacteristic('キャラクタリスティックUUID');
-                
-                await characteristic.startNotifications();
-                characteristic.addEventListener('characteristicvaluechanged', handleDataChanged);
-                console.log('接続完了。センサーデータの受信を開始しました。');
+                // TempBytesの先頭2バイト(0x55, 0x61)はBLE通知では送られてこないことが多いので、
+                // 18バイトのデータが直接来ると仮定して解析します。
+                if (value.byteLength >= 18) {
+                     const data = {
+                        AccX: dataView.getInt16(0, true) / 32768 * 16,
+                        AccY: dataView.getInt16(2, true) / 32768 * 16,
+                        AccZ: dataView.getInt16(4, true) / 32768 * 16,
+                        AsX:  dataView.getInt16(6, true) / 32768 * 2000,
+                        AsY:  dataView.getInt16(8, true) / 32768 * 2000,
+                        AsZ:  dataView.getInt16(10, true) / 32768 * 2000,
+                        AngX: dataView.getInt16(12, true) / 32768 * 180,
+                        AngY: dataView.getInt16(14, true) / 32768 * 180,
+                        AngZ: dataView.getInt16(16, true) / 32768 * 180,
+                    };
+                    processSwingData(data); // 解析データをスイング判定ロジックへ
+                    updateLiveDataUI(data);
+                }
+            }
 
-            } catch (error) {
-                console.error('接続エラー:', error);
+            // --- スイング判定ロジック (以前の安定版) ---
+            let currentThreshold = parseFloat(thresholdSlider.value);
+            let isCooldown = false;
+            let isSwinging = false;
+            let peakTotalAcc = 0;
+            let peakAngX = 0;
+            
+            thresholdSlider.addEventListener('input', (e) => {
+                currentThreshold = parseFloat(e.target.value);
+                thresholdVal.textContent = currentThreshold.toFixed(1);
+            });
+
+            function processSwingData(data) {
+                const totalAcc = Math.sqrt(data.AccX**2 + data.AccY**2 + data.AccZ**2);
+                const angX = data.AngX;
+
+                if (!isCooldown) {
+                    if (!isSwinging) {
+                        if (totalAcc > currentThreshold) {
+                            isSwinging = true;
+                            peakTotalAcc = totalAcc;
+                            peakAngX = angX;
+                        }
+                    } else {
+                        if (totalAcc > peakTotalAcc) {
+                            peakTotalAcc = totalAcc;
+                            peakAngX = angX;
+                        }
+                        const settleThreshold = Math.min(currentThreshold * 0.7, 1.5);
+                        if (totalAcc < settleThreshold) {
+                            if (peakTotalAcc > 0) {
+                                const accStr = peakTotalAcc.toFixed(2);
+                                let tiltAngle = 0;
+                                let swingType = "";
+                                if (peakAngX > 0) {
+                                    tiltAngle = 90 - peakAngX;
+                                    swingType = "FH";
+                                    flashIndicator('fh');
+                                } else if (peakAngX < 0) {
+                                    tiltAngle = 90 - Math.abs(peakAngX);
+                                    swingType = "BH";
+                                    flashIndicator('bh');
+                                }
+                                tiltAngle = Math.max(0, Math.min(90, tiltAngle));
+                                const tiltStr = tiltAngle.toFixed(0);
+
+                                document.getElementById('peakAccAmount').textContent = accStr;
+                                document.getElementById('peakTiltAngle').textContent = tiltStr;
+                                addHistory(swingType, accStr, tiltStr);
+
+                                isCooldown = true;
+                                setTimeout(() => { isCooldown = false; }, 800);
+                            }
+                            isSwinging = false;
+                            peakTotalAcc = 0;
+                            peakAngX = 0;
+                        }
+                    }
+                }
+            }
+
+            // --- UI更新関数 ---
+            const liveDataNodes = {};
+            const liveDataContainer = document.getElementById('live-data-container');
+            function updateLiveDataUI(data) {
+                if (liveDataContainer.textContent.includes('待機中')) liveDataContainer.innerHTML = '';
+                for (const key in data) {
+                    let val = data[key];
+                    if (typeof val === 'number') val = val.toFixed(2);
+                    if (!liveDataNodes[key]) {
+                        const row = document.createElement('div');
+                        row.className = 'data-item';
+                        const nameSpan = document.createElement('span');
+                        nameSpan.textContent = key;
+                        const valSpan = document.createElement('span');
+                        row.appendChild(nameSpan);
+                        row.appendChild(valSpan);
+                        liveDataContainer.appendChild(row);
+                        liveDataNodes[key] = valSpan;
+                    }
+                    liveDataNodes[key].textContent = val;
+                }
+            }
+             function addHistory(type, acc, tilt) {
+                const item = document.createElement('div');
+                item.className = `history-item ${type.toLowerCase()}`;
+                item.innerHTML = `<span class="history-time">${new Date().toLocaleTimeString()}</span><span class="history-type ${type.toLowerCase()}">${type}</span><span class="history-val">${acc}g</span><span class="history-val">${tilt}°</span>`;
+                historyList.prepend(item);
+                if (historyList.children.length > 50) historyList.removeChild(historyList.lastChild);
+            }
+            function flashIndicator(type) {
+                const elem = document.getElementById(type + '-indicator');
+                elem.classList.add(type + '-active');
+                setTimeout(() => elem.classList.remove(type + '-active'), 500);
             }
         });
-
-        // 3. データを受信したときの処理（ここでこれまでの判定ロジックを動かす）
-        function handleDataChanged(event) {
-            const value = event.target.value;
-            // バイトデータを解析して、AccX, AccY, AccZ, AngX を復元する
-            // (device_model.py の struct.unpack と同じ解析をJSの DataView で行います)
-            const dataView = new DataView(value.buffer);
-            
-            // 例: センサーがショート型の整数で14バイト送ってくる場合のJS側パース処理
-            const data = {
-                AccX: dataView.getInt16(0, true) / 32768.0 * 16.0, // センサー仕様に合わせる
-                AccY: dataView.getInt16(2, true) / 32768.0 * 16.0,
-                AccZ: dataView.getInt16(4, true) / 32768.0 * 16.0,
-                AngX: dataView.getInt16(6, true) / 32768.0 * 180.0
-            };
-
-            // あとはPC版で作ったスイング判定・履歴追加ロジックにそのまま流し込むだけ！
-            processSensorData(data); 
-        }
     </script>
 </body>
 </html>
