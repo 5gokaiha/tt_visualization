@@ -1,1 +1,385 @@
-test
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>卓球スイング判定 (Android版)</title>
+    
+    <!-- PWA用の読み込み設定 (オフライン対応) -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#007bff">
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js')
+                    .then(reg => console.log('PWA ServiceWorker 登録成功', reg))
+                    .catch(err => console.log('PWA ServiceWorker 登録失敗', err));
+            });
+        }
+    </script>
+
+    <style>
+        /* --- 全体的にコンパクトにするスタイル調整 --- */
+        body { font-family: sans-serif; background-color: #f0f2f5; margin: 10px; font-size: 13px; color: #333; }
+        .container { max-width: 900px; margin: 0 auto; display: flex; flex-direction: column; gap: 10px; }
+        
+        .panel { background: white; padding: 12px 15px; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        h2 { font-size: 14px; margin: 0 0 10px 0; color: #444; border-bottom: 2px solid #eee; padding-bottom: 5px; }
+        
+        .row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+        .flex-1 { flex: 1; }
+        
+        /* UI部品のコンパクト化 */
+        select, button, input[type="range"] { padding: 4px 8px; font-size: 12px; border: 1px solid #ccc; border-radius: 4px; }
+        button { cursor: pointer; color: white; border: none; background: #6c757d; transition: 0.1s; }
+        button:hover { opacity: 0.8; }
+        button.primary { background: #007bff; font-weight: bold; }
+        .status-badge { background: #e9ecef; padding: 3px 6px; border-radius: 4px; font-weight: bold; font-size: 11px; }
+
+        /* --- 可視化エリアの3カラムレイアウト --- */
+        .vis-layout { display: flex; gap: 15px; align-items: stretch; height: 350px; }
+        .vis-left { flex: 2; display: flex; flex-direction: column; gap: 10px; min-width: 250px; }
+        .vis-center { flex: 2; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 6px; padding: 8px; display: flex; flex-direction: column; min-width: 280px; }
+        .vis-right { flex: 1; background: #272822; padding: 10px; border-radius: 6px; color: #a6e22e; min-width: 150px; display: flex; flex-direction: column; }
+
+        /* --- スイング判定インジケーター (Left) --- */
+        #swing-indicators { display: flex; gap: 10px; }
+        .indicator { flex: 1; text-align: center; padding: 12px; font-size: 1.4em; font-weight: bold; background: #e0e0e0; color: #aaa; border-radius: 6px; transition: all 0.1s; }
+        .indicator.fh-active { background: #ff4757; color: white; transform: scale(1.02); box-shadow: 0 0 15px #ff4757; }
+        .indicator.bh-active { background: #1e90ff; color: white; transform: scale(1.02); box-shadow: 0 0 15px #1e90ff; }
+
+        /* --- インパクト瞬間データ表示UI (Left) --- */
+        .impact-stats { display: flex; flex-direction: column; gap: 8px; background: #eef; padding: 10px; border-radius: 6px; border: 1px solid #ccd; flex: 1; justify-content: center; }
+        .stat-row { display: flex; justify-content: space-between; align-items: center; }
+        .stat-label { font-weight: bold; color: #495057; }
+        .stat-box { font-family: monospace; font-size: 16px; background: white; padding: 4px 8px; border-radius: 4px; border: 1px solid #ddd; color: #d63031; font-weight: bold; min-width: 60px; text-align: right; }
+
+        /* --- 検出履歴UI (Center) --- */
+        .history-title { font-weight: bold; margin-bottom: 8px; font-size: 12px; color: #555; }
+        .history-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; padding-right: 4px; }
+        .history-item { background: white; border: 1px solid #ccc; border-radius: 4px; padding: 6px 8px; display: flex; justify-content: space-between; align-items: center; font-size: 11px; }
+        .history-item.fh { border-left: 4px solid #ff4757; }
+        .history-item.bh { border-left: 4px solid #1e90ff; }
+        .history-time { color: #888; width: 55px; }
+        .history-type { font-weight: bold; width: 30px; text-align: center; }
+        .history-type.fh { color: #ff4757; }
+        .history-type.bh { color: #1e90ff; }
+        .history-val { font-family: monospace; }
+
+        /* --- 生データ表示UI (Right) --- */
+        .live-data-title { font-size: 11px; color: #fff; margin-bottom: 8px; border-bottom: 1px solid #555; padding-bottom: 4px; }
+        #live-data-container { flex: 1; overflow-y: auto; }
+        .data-item { display: flex; justify-content: space-between; font-family: monospace; font-size: 12px; margin-bottom: 4px; border-bottom: 1px dashed #444; padding-bottom: 2px;}
+        .data-item:last-child { border-bottom: none; }
+        
+        /* スクロールバーの装飾 */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: #ccc; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #999; }
+        
+        /* デバッグログ */
+        .log-panel { margin-top: 10px; background: #333; color: #eee; padding: 10px; font-family: monospace; height: 100px; overflow-y: auto; font-size: 11px; border-radius: 4px;}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- 接続UI -->
+        <div class="panel">
+             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <h2 style="margin: 0; border: none;">接続コントロール</h2>
+                <span id="statusText" class="status-badge">未接続</span>
+            </div>
+            <div class="row">
+                <button id="connectBtn" class="primary">① センサーに接続</button>
+                <button id="disconnectBtn">② 切断</button>
+            </div>
+        </div>
+
+        <!-- 可視化UI -->
+        <div class="panel">
+            <h2>スイング判定・可視化</h2>
+            
+            <div class="vis-layout">
+                <!-- 左側：判定UIと設定 -->
+                <div class="vis-left">
+                    <div class="row" style="background: #eef; padding: 8px; border-radius: 4px; margin: 0;">
+                        <label style="font-weight: bold; font-size: 12px;">判定閾値: <span id="thresholdVal">3.0</span>g</label>
+                        <input type="range" id="thresholdSlider" min="1.0" max="15.0" step="0.1" value="3.0" class="flex-1">
+                    </div>
+
+                    <div id="swing-indicators">
+                        <div id="fh-indicator" class="indicator">FH</div>
+                        <div id="bh-indicator" class="indicator">BH</div>
+                    </div>
+
+                    <div class="impact-stats">
+                        <div class="history-title">最新のインパクト</div>
+                        <div class="stat-row">
+                            <span class="stat-label">最大加速度:</span>
+                            <span><span class="stat-box" id="peakAccAmount">0.00</span> g</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">傾斜角度:</span>
+                            <span><span class="stat-box" id="peakTiltAngle">0</span> °</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 中央：検出履歴 -->
+                <div class="vis-center">
+                    <div class="history-title">検出履歴 (History)</div>
+                    <div class="history-list" id="history-list"></div>
+                </div>
+
+                <!-- 右側：生データUI -->
+                <div class="vis-right">
+                    <div class="live-data-title">生データ (Live)</div>
+                    <div id="live-data-container" style="color:#aaa; font-size:11px;">待機中...</div>
+                </div>
+            </div>
+        </div>
+        <!-- デバッグログ -->
+        <div class="log-panel" id="log-panel">起動完了。センサーと接続してください。</div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- グローバル変数 ---
+            let device = null;
+            let notifyCharacteristic = null;
+            let dataBuffer = []; // 受信バッファ
+
+            // センサー固有のUUID
+            const SERVICE_UUID = "0000ffe5-0000-1000-8000-00805f9a34fb";
+            const NOTIFY_UUID = "0000ffe4-0000-1000-8000-00805f9a34fb";
+
+            // --- UI要素取得 ---
+            const connectBtn = document.getElementById('connectBtn');
+            const disconnectBtn = document.getElementById('disconnectBtn');
+            const statusText = document.getElementById('statusText');
+            const logPanel = document.getElementById('log-panel');
+            const historyList = document.getElementById('history-list');
+            const thresholdSlider = document.getElementById('thresholdSlider');
+            const thresholdVal = document.getElementById('thresholdVal');
+            
+            // ログ出力関数
+            function log(message) {
+                console.log(message);
+                logPanel.innerHTML = `[${new Date().toLocaleTimeString()}] ${message}<br>` + logPanel.innerHTML;
+            }
+
+            // --- 接続処理 ---
+            connectBtn.addEventListener('click', async () => {
+                log("接続ボタン押下...");
+                if (!navigator.bluetooth) {
+                    log("エラー: このブラウザはWeb Bluetoothをサポートしていません。");
+                    return;
+                }
+
+                try {
+                    log("デバイスを検索中... (デバイス名プレフィックス: 'WT')");
+                    device = await navigator.bluetooth.requestDevice({
+                        filters: [{ namePrefix: 'WT' }],
+                        optionalServices: [SERVICE_UUID]
+                    });
+                    
+                    log(`デバイス選択: ${device.name}`);
+                    device.addEventListener('gattserverdisconnected', onDisconnected);
+                    
+                    log("GATTサーバーに接続中...");
+                    const server = await device.gatt.connect();
+
+                    log("サービス取得中...");
+                    const service = await server.getPrimaryService(SERVICE_UUID);
+
+                    log("キャラクタリスティック取得中...");
+                    notifyCharacteristic = await service.getCharacteristic(NOTIFY_UUID);
+
+                    log("通知(Notification)開始...");
+                    await notifyCharacteristic.startNotifications();
+                    notifyCharacteristic.addEventListener('characteristicvaluechanged', onDataReceived);
+                    
+                    statusText.textContent = "接続完了";
+                    log("接続成功！データの受信待機中...");
+
+                } catch(error) {
+                    log(`エラー: ${error.message}`);
+                    if (device && device.gatt) device.gatt.disconnect();
+                }
+            });
+
+            // --- 切断処理 ---
+            disconnectBtn.addEventListener('click', () => {
+                if (!device || !device.gatt.connected) {
+                    log("切断済みです。"); return;
+                }
+                log("切断します...");
+                device.gatt.disconnect();
+            });
+
+            function onDisconnected() {
+                log("デバイスとの接続が切れました。");
+                statusText.textContent = "未接続";
+                if(notifyCharacteristic) {
+                    notifyCharacteristic.removeEventListener('characteristicvaluechanged', onDataReceived);
+                }
+            }
+
+            // --- データ受信・バッファリング処理 ---
+            function onDataReceived(event) {
+                const value = event.target.value; // DataView
+                const newBytes = new Uint8Array(value.buffer);
+                
+                for (const byte of newBytes) {
+                    dataBuffer.push(byte);
+
+                    // バッファの先頭がヘッダ(0x55, 0x61)になるよう調整
+                    while (dataBuffer.length >= 2 && (dataBuffer[0] !== 0x55 || dataBuffer[1] !== 0x61)) {
+                        dataBuffer.shift(); 
+                    }
+
+                    // ヘッダを含む20バイトのパケットが揃ったら処理へ
+                    if (dataBuffer.length >= 20) {
+                        const packet = dataBuffer.slice(0, 20); 
+                        dataBuffer.splice(0, 20); 
+                        
+                        // ヘッダ(2バイト)を除いた18バイトのペイロードを解析へ
+                        processData(packet.slice(2)); 
+                    }
+                }
+            }
+
+            // --- データ解析処理 (device_model.py の完全移植) ---
+            function processData(bytes) { 
+                // JavaScriptのDataViewでリトルエンディアンの16ビット符号付き整数として読む
+                const dataView = new DataView(new Uint8Array(bytes).buffer);
+
+                const data = {
+                    AccX: dataView.getInt16(0, true) / 32768 * 16,
+                    AccY: dataView.getInt16(2, true) / 32768 * 16,
+                    AccZ: dataView.getInt16(4, true) / 32768 * 16,
+                    AsX:  dataView.getInt16(6, true) / 32768 * 2000,
+                    AsY:  dataView.getInt16(8, true) / 32768 * 2000,
+                    AsZ:  dataView.getInt16(10, true) / 32768 * 2000,
+                    AngX: dataView.getInt16(12, true) / 32768 * 180,
+                    AngY: dataView.getInt16(14, true) / 32768 * 180,
+                    AngZ: dataView.getInt16(16, true) / 32768 * 180,
+                };
+                processSwingData(data); // 解析データをスイング判定ロジックへ
+                updateLiveDataUI(data); // 画面右の生データを更新
+            }
+
+
+            // --- スイング判定ロジック (ピーク検知式・安定版) ---
+            let currentThreshold = parseFloat(thresholdSlider.value);
+            let isCooldown = false;
+            let isSwinging = false;
+            let peakTotalAcc = 0;
+            let peakAngX = 0;
+            
+            thresholdSlider.addEventListener('input', (e) => {
+                currentThreshold = parseFloat(e.target.value);
+                thresholdVal.textContent = currentThreshold.toFixed(1);
+            });
+
+            function processSwingData(data) {
+                // 総合加速度
+                const totalAcc = Math.sqrt(data.AccX**2 + data.AccY**2 + data.AccZ**2);
+                const angX = data.AngX;
+
+                if (!isCooldown) {
+                    if (!isSwinging) {
+                        // 【スイング開始】スライダー設定の閾値を超えたら捕捉スタート
+                        if (totalAcc > currentThreshold) {
+                            isSwinging = true;
+                            peakTotalAcc = totalAcc;
+                            peakAngX = angX;
+                        }
+                    } else {
+                        // 【スイング中】ピーク（最大値）を更新し続ける
+                        if (totalAcc > peakTotalAcc) {
+                            peakTotalAcc = totalAcc;
+                            peakAngX = angX;
+                        }
+                        
+                        // 【スイング終了】加速度が十分に落ち着いたら判定を下す
+                        const settleThreshold = Math.min(currentThreshold * 0.7, 1.5);
+                        if (totalAcc < settleThreshold) {
+                            if (peakTotalAcc > 0) {
+                                const accStr = peakTotalAcc.toFixed(2);
+                                let tiltAngle = 0;
+                                let swingType = "";
+                                
+                                // AngXの正負でFH/BH判定
+                                if (peakAngX > 0) {
+                                    tiltAngle = 90 - peakAngX;
+                                    swingType = "FH";
+                                    flashIndicator('fh');
+                                } else if (peakAngX < 0) {
+                                    tiltAngle = 90 - Math.abs(peakAngX);
+                                    swingType = "BH";
+                                    flashIndicator('bh');
+                                }
+                                
+                                // 角度を補正して表示
+                                tiltAngle = Math.max(0, Math.min(90, tiltAngle));
+                                const tiltStr = tiltAngle.toFixed(0);
+
+                                document.getElementById('peakAccAmount').textContent = accStr;
+                                document.getElementById('peakTiltAngle').textContent = tiltStr;
+                                addHistory(swingType, accStr, tiltStr);
+
+                                // 連続検知を防ぐクールダウン (0.8秒)
+                                isCooldown = true;
+                                setTimeout(() => { isCooldown = false; }, 800);
+                            }
+                            isSwinging = false;
+                            peakTotalAcc = 0;
+                            peakAngX = 0;
+                        }
+                    }
+                }
+            }
+
+            // --- UI更新関数 ---
+            const liveDataNodes = {};
+            const liveDataContainer = document.getElementById('live-data-container');
+            function updateLiveDataUI(data) {
+                if (liveDataContainer.textContent.includes('待機中')) liveDataContainer.innerHTML = '';
+                for (const key in data) {
+                    let val = data[key];
+                    if (typeof val === 'number') val = val.toFixed(2);
+                    if (!liveDataNodes[key]) {
+                        const row = document.createElement('div');
+                        row.className = 'data-item';
+                        const nameSpan = document.createElement('span');
+                        nameSpan.textContent = key;
+                        const valSpan = document.createElement('span');
+                        row.appendChild(nameSpan);
+                        row.appendChild(valSpan);
+                        liveDataContainer.appendChild(row);
+                        liveDataNodes[key] = valSpan;
+                    }
+                    liveDataNodes[key].textContent = val;
+                }
+            }
+
+             function addHistory(type, acc, tilt) {
+                const item = document.createElement('div');
+                item.className = `history-item ${type.toLowerCase()}`;
+                item.innerHTML = `<span class="history-time">${new Date().toLocaleTimeString()}</span><span class="history-type ${type.toLowerCase()}">${type}</span><span class="history-val">${acc}g</span><span class="history-val">${tilt}°</span>`;
+                historyList.prepend(item);
+                // 履歴が50件を超えたら古いものを削除
+                if (historyList.children.length > 50) historyList.removeChild(historyList.lastChild);
+            }
+
+            function flashIndicator(type) {
+                const elem = document.getElementById(type + '-indicator');
+                elem.classList.add(type + '-active');
+                setTimeout(() => elem.classList.remove(type + '-active'), 500);
+            }
+        });
+    </script>
+</body>
+</html>

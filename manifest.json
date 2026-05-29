@@ -1,0 +1,17 @@
+{
+  "short_name": "スイング判定",
+  "name": "卓球スイング判定 Web App",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/3133/3133100.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "index.html",
+  "background_color": "#f0f2f5",
+  "theme_color": "#007bff",
+  "display": "standalone",
+  "orientation": "portrait"
+}
