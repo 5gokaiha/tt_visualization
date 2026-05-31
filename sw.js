@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pingpong-swing-v5'; // ★キャッシュバージョンをインクリメント
+const CACHE_NAME = 'pingpong-swing-v6';
 const ASSETS_TO_CACHE = [
   'index.html',
   'manifest.json',
@@ -35,7 +35,7 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// フェッチ処理
+// オフライン時はキャッシュからページを返す
 self.addEventListener('fetch', (event) => {
   event.respondWith(
     caches.match(event.request).then((response) => {

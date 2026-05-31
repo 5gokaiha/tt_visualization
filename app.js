@@ -2,13 +2,12 @@ document.addEventListener('DOMContentLoaded', () => {
     let device = null, notifyCharacteristic = null;
     let fileHandle = null, writer = null;
     let isRecording = false;
-    let recordedRows = []; // Android等、ストリームが使えない環境用のデータバッファ
+    let recordedRows = []; // Androidなど、ストリーム非対応環境用のデータバッファ
 
-    // UUID定義
     const SERVICE_UUID = "0000ffe5-0000-1000-8000-00805f9a34fb";
     const NOTIFY_UUID = "0000ffe4-0000-1000-8000-00805f9a34fb";
 
-    // DOM要素の取得
+    // 安全なDOM取得（キャッシュズレによるクラッシュ防止）
     const connectBtn = document.getElementById('connectBtn');
     const disconnectBtn = document.getElementById('disconnectBtn');
     const recordBtn = document.getElementById('recordBtn');
@@ -20,13 +19,19 @@ document.addEventListener('DOMContentLoaded', () => {
     const liveDataContainer = document.getElementById('live-data-container');
 
     window.log = function(message) {
-        logLine.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+        if(logLine) logLine.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+        console.log(message);
     };
 
-    themeToggle.addEventListener('click', () => document.body.classList.toggle('dark-mode'));
+    if(themeToggle) themeToggle.addEventListener('click', () => document.body.classList.toggle('dark-mode'));
 
-    connectBtn.addEventListener('click', async () => {
+    // --- BLE 接続・切断 ---
+    if(connectBtn) connectBtn.addEventListener('click', async () => {
         log("接続ボタン押下...");
+        if (!navigator.bluetooth) {
+            log("エラー: このブラウザはBluetoothをサポートしていません。");
+            return;
+        }
         try {
             log("デバイスを検索中...");
             device = await navigator.bluetooth.requestDevice({
@@ -43,7 +48,7 @@ document.addEventListener('DOMContentLoaded', () => {
             await notifyCharacteristic.startNotifications();
             notifyCharacteristic.addEventListener('characteristicvaluechanged', onDataReceivedInternal);
             
-            statusText.textContent = "接続完了";
+            if(statusText) statusText.textContent = "接続完了";
             log("接続成功！");
         } catch(error) {
             log(`エラー: ${error.message}`);
@@ -51,92 +56,84 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    disconnectBtn.addEventListener('click', async () => {
+    if(disconnectBtn) disconnectBtn.addEventListener('click', async () => {
         if (device && device.gatt.connected) {
             device.gatt.disconnect();
         } else {
             log("切断済み。");
         }
-        if (isRecording) {
-            await stopRecording();
-        }
+        if (isRecording) await stopRecording();
     });
 
     function onDisconnected() {
         log("接続が切れました。");
-        statusText.textContent = "未接続";
+        if(statusText) statusText.textContent = "未接続";
         if(notifyCharacteristic) {
             notifyCharacteristic.removeEventListener('characteristicvaluechanged', onDataReceivedInternal);
         }
     }
 
-    recordBtn.addEventListener('click', async () => {
-        if (isRecording) {
-            await stopRecording();
-        } else {
-            await startRecording();
-        }
+    // --- データ記録 (PC/Android両対応) ---
+    if(recordBtn) recordBtn.addEventListener('click', async () => {
+        if (isRecording) await stopRecording();
+        else await startRecording();
     });
 
-    // 記録開始
     async function startRecording() {
         const now = new Date();
         const timestamp = `${now.getFullYear()}${(now.getMonth() + 1).toString().padStart(2, '0')}${now.getDate().toString().padStart(2, '0')}_${now.getHours().toString().padStart(2, '0')}${now.getMinutes().toString().padStart(2, '0')}${now.getSeconds().toString().padStart(2, '0')}`;
         const fileName = `swing_log_${timestamp}.csv`;
 
-        // デスクトップ版の保存ピッカーがサポートされているか確認
+        // PC向けの新しいAPIが使えるか判定
         if ('showSaveFilePicker' in window) {
             try {
                 fileHandle = await window.showSaveFilePicker({
                     suggestedName: fileName,
-                    types: [{
-                        description: 'CSVファイル',
-                        accept: { 'text/csv': ['.csv'] },
-                    }],
+                    types: [{ description: 'CSVファイル', accept: { 'text/csv': ['.csv'] } }],
                 });
                 writer = await fileHandle.createWritable();
                 await writer.write('time,type,accuracy,tilt,orbit_points\n');
                 
                 isRecording = true;
-                recordBtn.textContent = "記録終了";
-                recordBtn.style.backgroundColor = 'var(--record-color)';
+                if(recordBtn) {
+                    recordBtn.textContent = "記録終了";
+                    recordBtn.style.background = 'var(--record-color)';
+                }
                 log(`記録開始: ${fileHandle.name}`);
             } catch (err) {
-                if (err.name !== 'AbortError') {
-                    log(`記録開始エラー: ${err.message}`);
-                } else {
-                    log("ファイル保存がキャンセルされました。");
-                }
+                if (err.name !== 'AbortError') log(`記録開始エラー: ${err.message}`);
+                else log("ファイル保存がキャンセルされました。");
             }
         } else {
-            // Android等の非対応ブラウザ用の代替保存処理 (オンメモリバッファ)
+            // Android等の非対応ブラウザ用代替処理 (メモリに蓄積して後でダウンロード)
             recordedRows = ['time,type,accuracy,tilt,orbit_points'];
             isRecording = true;
-            recordBtn.textContent = "記録終了";
-            recordBtn.style.backgroundColor = 'var(--record-color)';
-            log("記録開始 (モバイル互換モード - 終了時にダウンロード保存されます)");
+            if(recordBtn) {
+                recordBtn.textContent = "記録終了";
+                recordBtn.style.background = 'var(--record-color)';
+            }
+            log("記録開始 (モバイルモード: 終了時に自動ダウンロード保存されます)");
         }
     }
 
-    // 記録終了・書き出し
     async function stopRecording() {
         isRecording = false;
-        recordBtn.textContent = "記録開始";
-        recordBtn.style.backgroundColor = '';
+        if(recordBtn) {
+            recordBtn.textContent = "記録開始";
+            recordBtn.style.background = ''; // デフォルト色に戻す
+        }
 
         if (writer) {
-            // デスクトップストリームを閉じる
             await writer.close();
             writer = null;
             fileHandle = null;
             log("記録を保存・終了しました。");
         } else {
-            // Android等の代替保存処理 (Blobダウンロード)
+            // Android用のダウンロード処理
             if (recordedRows.length > 1) {
                 try {
                     const csvContent = recordedRows.join('\n') + '\n';
                     const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvContent], { type: 'text/csv;charset=utf-8;' });
-                    
                     const link = document.createElement('a');
                     const now = new Date();
                     const timestamp = `${now.getFullYear()}${(now.getMonth() + 1).toString().padStart(2, '0')}${now.getDate().toString().padStart(2, '0')}_${now.getHours().toString().padStart(2, '0')}${now.getMinutes().toString().padStart(2, '0')}${now.getSeconds().toString().padStart(2, '0')}`;
@@ -146,8 +143,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     document.body.appendChild(link);
                     link.click();
                     document.body.removeChild(link);
-                    
-                    log("記録データを「ダウンロード」に自動保存しました。");
+                    log("記録データをダウンロードフォルダに保存しました。");
                 } catch (e) {
                     log(`保存エラー: ${e.message}`);
                 }
@@ -161,17 +157,12 @@ document.addEventListener('DOMContentLoaded', () => {
     window.recordSwingData = async (data) => {
         if (!isRecording) return;
         const csvRow = `${data.time},${data.type},${data.acc.toFixed(4)},${data.tilt.toFixed(4)},"${data.orbitPoints.join(' ')}"`;
-        
-        if (writer) {
-            await writer.write(csvRow + '\n');
-        } else {
-            recordedRows.push(csvRow);
-        }
+        if (writer) await writer.write(csvRow + '\n');
+        else recordedRows.push(csvRow);
     };
 
-    // 履歴読み込み (Android互換対応)
-    loadCsvBtn.addEventListener('click', async () => {
-        // デスクトップピッカー対応
+    // --- CSV読み込み (PC/Android両対応) ---
+    if(loadCsvBtn) loadCsvBtn.addEventListener('click', async () => {
         if ('showOpenFilePicker' in window) {
             try {
                 const [fileHandle] = await window.showOpenFilePicker({
@@ -182,35 +173,27 @@ document.addEventListener('DOMContentLoaded', () => {
                 const contents = await file.text();
                 parseAndLoadCsv(contents, file.name);
             } catch (err) {
-                if (err.name !== 'AbortError') {
-                    log(`CSV読込エラー: ${err.message}`);
-                } else {
-                    log("ファイル選択がキャンセルされました。");
-                }
+                if (err.name !== 'AbortError') log(`CSV読込エラー: ${err.message}`);
+                else log("ファイル選択がキャンセルされました。");
             }
         } else {
-            // Androidなどの互換モード: 動的に通常ファイル入力要素を生成して呼び出し
+            // Android用の代替読み込み処理
             const input = document.createElement('input');
             input.type = 'file';
             input.accept = '.csv, text/csv';
-            
             input.onchange = e => {
                 const file = e.target.files[0];
                 if (!file) return;
-                
                 const reader = new FileReader();
-                reader.onload = event => {
-                    parseAndLoadCsv(event.target.result, file.name);
-                };
+                reader.onload = event => parseAndLoadCsv(event.target.result, file.name);
                 reader.readAsText(file);
             };
             input.click();
         }
     });
 
-    // CSV解析とUI展開
     function parseAndLoadCsv(contents, fileName) {
-        window.clearHistory();
+        if(typeof window.clearHistory === 'function') window.clearHistory();
 
         const rows = contents.split('\n').filter(row => row.trim() !== '' && !row.startsWith('time'));
         if (rows.length === 0) {
@@ -224,45 +207,47 @@ document.addEventListener('DOMContentLoaded', () => {
         rows.forEach((row, index) => {
             const columns = row.split(',');
             if (columns.length < 4) return;
+            
             const timeParts = columns[0].split(':');
             if (timeParts.length >= 3) {
-                today.[...](asc_slot://start-slot-9)setHours(timeParts[0], timeParts[...](asc_slot://start-slot-10), timeParts);
+                today.setHours(parseInt(timeParts[0], 10), parseInt(timeParts[1], 10), parseInt(timeParts[2], 10));
             }
 
             const swingData = {
                 id: today.getTime() + index,
-                timestamp: new Date(today.[...](asc_slot://start-slot-12)getTime()),
+                timestamp: new Date(today.getTime()),
                 time: columns[0],
-                type: columns[...](asc_slot://start-slot-13),
-                acc: parseFloat(columns[...](asc_slot://start-slot-14)),
-                tilt: parseFloat(columns[...](asc_slot://start-slot-15)),
-                orbitPoints: columns ? columns.replace(/"/g, '').split(' ') : []
+                type: columns[1],
+                acc: parseFloat(columns[2]),
+                tilt: parseFloat(columns[3]),
+                orbitPoints: columns[4] ? columns[4].replace(/"/g, '').split(' ') : []
             };
-            window.addHistory(swingData);
+            
+            if(typeof window.addHistory === 'function') window.addHistory(swingData);
             loadedDataForChart.push(swingData);
         });
         
-        window.loadHistoryToChart(loadedDataForChart);
+        if(typeof window.loadHistoryToChart === 'function') window.loadHistoryToChart(loadedDataForChart);
         log(`${fileName} を読み込み、${rows.length}件の履歴を表示しました。`);
     }
     
-    clearHistoryBtn.addEventListener('click', () => {
+    if(clearHistoryBtn) clearHistoryBtn.addEventListener('click', () => {
         if (confirm('すべての履歴を削除しますか？')) {
-            window.clearHistory();
+            if(typeof window.clearHistory === 'function') window.clearHistory();
             log('履歴をすべて削除しました。');
         }
     });
 
     function onDataReceivedInternal(event) {
         const value = event.target.value;
-        if (typeof window.onRawDataReceived === 'function') {
-            window.onRawDataReceived(value);
-        }
+        if (typeof window.onRawDataReceived === 'function') window.onRawDataReceived(value);
     }
 
     const liveDataNodes = {};
     window.updateLiveDataUI = function(data) {
+        if (!liveDataContainer) return;
         if (liveDataContainer.textContent.includes('待機中')) liveDataContainer.innerHTML = '';
+        
         for (const key in data) {
             if (!liveDataNodes[key]) {
                 const row = document.createElement('div');
@@ -288,13 +273,10 @@ document.addEventListener('DOMContentLoaded', () => {
             node.text.textContent = (typeof value === 'number') ? value.toFixed(2) : value;
 
             let percentage = 0;
-            if (key.startsWith('Acc')) {
-                percentage = (Math.abs(value) / 16) * 100;
-            } else if (key.startsWith('Ang')) {
-                percentage = (Math.abs(value) / 180) * 100;
-            } else if (key.startsWith('As')) {
-                percentage = (Math.abs(value) / 2000) * 100;
-            }
+            if (key.startsWith('Acc')) percentage = (Math.abs(value) / 16) * 100;
+            else if (key.startsWith('Ang')) percentage = (Math.abs(value) / 180) * 100;
+            else if (key.startsWith('As')) percentage = (Math.abs(value) / 2000) * 100;
+            
             node.bar.style.width = `${Math.min(percentage, 100)}%`;
         }
     };
