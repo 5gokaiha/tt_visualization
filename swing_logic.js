@@ -49,7 +49,7 @@
         initializeDistributionChart();
     });
 
-    // 分布図の初期化（③ ラベル/凡例修正）
+    // 分布図の初期化 (★軸範囲を固定)
     function initializeDistributionChart() {
         const ctx = document.getElementById('distribution-chart').getContext('2d');
         if (!ctx) return;
@@ -65,20 +65,21 @@
                         type: 'linear',
                         position: 'bottom',
                         min: 0,
-                        max: 90,
+                        max: 90, // 0-90度で固定
                         title: { display: true, text: 'Tilt Angle (deg)', font: { size: 10 } },
                         ticks: { font: { size: 10 } },
                         grid: { color: 'rgba(128, 128, 128, 0.2)' }
                     },
                     y: { // 縦軸: 加速度
-                        beginAtZero: true,
-                        title: { display: true, text: 'Accel (g)', font: { size: 10 } }, // ラベル文字とサイズ
-                        ticks: { font: { size: 10 } }, // 目盛りサイズ
+                        min: 0,
+                        max: 20, // 0-20gで固定
+                        title: { display: true, text: 'Accel (g)', font: { size: 10 } },
+                        ticks: { font: { size: 10 } },
                         grid: { color: 'rgba(128, 128, 128, 0.2)' }
                     }
                 },
                 plugins: {
-                    legend: { display: false }, // 色説明を非表示
+                    legend: { display: false }, 
                     tooltip: {
                         callbacks: {
                             label: function(context) {
@@ -224,7 +225,6 @@
         
         document.getElementById('racket-text').textContent = type;
         document.getElementById('peakAccValue').textContent = `${acc.toFixed(2)}g`;
-        // ① バーの幅を更新
         document.getElementById('peakAccBar').style.width = `${Math.min(acc / 16 * 100, 100)}%`;
         
         const angleTextEl = document.getElementById('angle-text');
@@ -257,7 +257,7 @@
         const racketVisual = document.getElementById('racket-visual');
         racketVisual.style.fill = `var(--color-${colorClass})`;
 
-        // 新しい色クラスを適用 (① 最大加速度とバーの色連動を復活)
+        // 新しい色クラスを適用
         document.getElementById('racket-text').classList.add(`text-${colorClass}`);
         document.getElementById('peakAccValue').classList.add(`text-${colorClass}`);
         document.getElementById('peakAccBar').classList.add(`bg-color-${colorClass}`);

@@ -44,7 +44,7 @@
             </div>
             <!-- 生データパネル -->
             <div class="live-data-panel">
-                <h2 style="margin: 0; border: none; flex-shrink: 0; padding-bottom: 8px;">生データ (Live)</h2>
+                <h2 style="margin: 0; border: none;">生データ</h2>
                 <div id="live-data-container">待機中...</div>
             </div>
         </div>
@@ -72,11 +72,11 @@
                             <span id="angleHighlightVal">45</span>
                         </div>
                     </div>
-                    <div id="swing-indicators" style="flex-shrink: 0;">
-                        <div id="fh-indicator" class="indicator">FH</div>
-                        <div id="bh-indicator" class="indicator">BH</div>
-                    </div>
                     <div class="impact-stats">
+                        <div id="swing-indicators">
+                            <div id="fh-indicator" class="indicator">FH</div>
+                            <div id="bh-indicator" class="indicator">BH</div>
+                        </div>
                         <div class="stat-row">
                             <span class="stat-label">打球面:</span>
                             <div class="stat-visual racket-container">
@@ -111,21 +111,25 @@
                 </div>
                 <!-- 中央: スイング軌跡 & 分布図 -->
                 <div class="vis-center">
-                     <div class="vis-title">スイング軌跡</div>
                      <div class="vis-svg-container">
-                        <svg id="orbit-plot" viewBox="-16 -16 32 32" style="width: 100%; height: 100%;">
-                            <path d="M-16,0 L16,0 M0,-16 L0,16" stroke="var(--svg-grid)" stroke-width="0.3"/>
-                            <circle cx="0" cy="0" r="8" stroke="var(--svg-grid)" stroke-width="0.2" fill="none" stroke-dasharray="1 1" />
-                            <circle cx="0" cy="0" r="16" stroke="var(--svg-grid)" stroke-width="0.2" fill="none" />
-                            <polyline id="orbit-path" fill="none" stroke-width="0.8" stroke-linecap="round" stroke-linejoin="round"/>
-                        </svg>
-                         <div class="orbit-label x-axis">X: 前後</div>
-                         <div class="orbit-label y-axis">Y: 左右</div>
-                    </div>
-                    <div class="vis-title" style="margin-top: 10px;">加速度-角度 分布図</div>
-                    <div class="vis-chart-container">
-                        <canvas id="distribution-chart"></canvas>
-                    </div>
+                        <div class="vis-title">スイング軌跡</div>
+                        <div class="vis-content-wrapper">
+                            <svg id="orbit-plot" viewBox="-16 -16 32 32">
+                                <path d="M-16,0 L16,0 M0,-16 L0,16" stroke="var(--svg-grid)" stroke-width="0.3"/>
+                                <circle cx="0" cy="0" r="8" stroke="var(--svg-grid)" stroke-width="0.2" fill="none" stroke-dasharray="1 1" />
+                                <circle cx="0" cy="0" r="16" stroke="var(--svg-grid)" stroke-width="0.2" fill="none" />
+                                <polyline id="orbit-path" fill="none" stroke-width="0.8" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                            <div class="orbit-label x-axis">X: 前後</div>
+                            <div class="orbit-label y-axis">Y: 左右</div>
+                        </div>
+                     </div>
+                     <div class="vis-chart-container">
+                        <div class="vis-title">加速度-角度 分布図</div>
+                        <div class="vis-content-wrapper">
+                            <canvas id="distribution-chart"></canvas>
+                        </div>
+                     </div>
                 </div>
                 <!-- 右側: 履歴 -->
                 <div class="vis-right">
