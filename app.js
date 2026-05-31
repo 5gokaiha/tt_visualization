@@ -2,11 +2,13 @@ document.addEventListener('DOMContentLoaded', () => {
     let device = null, notifyCharacteristic = null;
     let fileHandle = null, writer = null;
     let isRecording = false;
-    let recordedRows = []; 
+    let recordedRows = []; // Android等、ストリームが使えない環境用のデータバッファ
 
+    // UUID定義
     const SERVICE_UUID = "0000ffe5-0000-1000-8000-00805f9a34fb";
     const NOTIFY_UUID = "0000ffe4-0000-1000-8000-00805f9a34fb";
 
+    // 安全なDOM取得（キャッシュズレによるクラッシュ防止）
     const connectBtn = document.getElementById('connectBtn');
     const disconnectBtn = document.getElementById('disconnectBtn');
     const recordBtn = document.getElementById('recordBtn');
@@ -72,145 +74,104 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- データ記録 ---
+    // --- データ記録 (PC/Android両対応) ---
     if(recordBtn) recordBtn.addEventListener('click', async () => {
         if (isRecording) await stopRecording();
         else await startRecording();
     });
 
     async function startRecording() {
-        const now = new Date();
-        const timestamp = `${now.getFullYear()}${(now.getMonth() + 1).toString().padStart(2, '0')}${now.getDate().toString().padStart(2, '0')}_${now.getHours().toString().padStart(2, '0')}${now.getMinutes().toString().padStart(2, '0')}${now.getSeconds().toString().padStart(2, '0')}`;
-        const fileName = `swing_log_${timestamp}.csv`;
-
-        if ('showSaveFilePicker' in window) {
-            try {
-                fileHandle = await window.showSaveFilePicker({
-                    suggestedName: fileName,
-                    types: [{ description: 'CSVファイル', accept: { 'text/csv': ['.csv'] } }],
-                });
-                writer = await fileHandle.createWritable();
-                await writer.write('time,type,accuracy,tilt,orbit_points\n');
-                
-                isRecording = true;
-                if(recordBtn) {
-                    recordBtn.textContent = "記録終了";
-                    recordBtn.style.background = 'var(--record-color)';
-                }
-                log(`記録開始: ${fileHandle.name}`);
-            } catch (err) {
-                if (err.name !== 'AbortError') log(`記録開始エラー: ${err.message}`);
-                else log("ファイル保存がキャンセルされました。");
-            }
-        } else {
-            recordedRows = ['time,type,accuracy,tilt,orbit_points'];
-            isRecording = true;
-            if(recordBtn) {
-                recordBtn.textContent = "記録終了";
-                recordBtn.style.background = 'var(--record-color)';
-            }
-            log("記録開始 (モバイルモード: 終了時に自動ダウンロード保存されます)");
+        recordedRows = ['time,type,accuracy,tilt,orbit_points'];
+        isRecording = true;
+        if(recordBtn) {
+            recordBtn.textContent = "記録終了";
+            recordBtn.style.background = 'var(--record-color)';
         }
+        log("記録開始");
     }
 
     async function stopRecording() {
-        isRecording = false;
+        isRecording = false; // まず記録を止める
         if(recordBtn) {
             recordBtn.textContent = "記録開始";
             recordBtn.style.background = '';
         }
 
-        if (writer) {
-            await writer.close();
-            writer = null;
-            fileHandle = null;
-            log("記録を保存・終了しました。");
-        } else {
-            if (recordedRows.length > 1) {
-                try {
-                    const csvContent = recordedRows.join('\n') + '\n';
-                    const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvContent], { type: 'text/csv;charset=utf-8;' });
-                    const link = document.createElement('a');
-                    const now = new Date();
-                    const timestamp = `${now.getFullYear()}${(now.getMonth() + 1).toString().padStart(2, '0')}${now.getDate().toString().padStart(2, '0')}_${now.getHours().toString().padStart(2, '0')}${now.getMinutes().toString().padStart(2, '0')}${now.getSeconds().toString().padStart(2, '0')}`;
-                    
-                    link.href = URL.createObjectURL(blob);
-                    link.download = `swing_log_${timestamp}.csv`;
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-                    log("記録データをダウンロードフォルダに保存しました。");
-                } catch (e) {
-                    log(`保存エラー: ${e.message}`);
-                }
-            } else {
-                log("記録データがありません。");
+        // ★原因①対策: 最後のデータが配列に入るのを待つための僅かな遅延
+        setTimeout(() => {
+            if (recordedRows.length <= 1) {
+                log("記録データがありませんでした。");
+                recordedRows = [];
+                return;
             }
+
+            try {
+                const csvContent = recordedRows.join('\n') + '\n';
+                // BOM付きでBlobを生成
+                const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvContent], { type: 'text/csv;charset=utf-8;' });
+                
+                const link = document.createElement('a');
+                const now = new Date();
+                const timestamp = `${now.getFullYear()}${(now.getMonth() + 1).toString().padStart(2, '0')}${now.getDate().toString().padStart(2, '0')}_${now.getHours().toString().padStart(2, '0')}${now.getMinutes().toString().padStart(2, '0')}${now.getSeconds().toString().padStart(2, '0')}`;
+                
+                link.href = URL.createObjectURL(blob);
+                link.download = `swing_log_${timestamp}.csv`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                
+                log("記録データをダウンロードフォルダに保存しました。");
+            } catch (e) {
+                log(`保存エラー: ${e.message}`);
+            }
+            // バッファをクリア
             recordedRows = [];
-        }
+        }, 500); // 500ミリ秒待機
     }
 
-    window.recordSwingData = async (data) => {
+    window.recordSwingData = (data) => {
         if (!isRecording) return;
         const csvRow = `${data.time},${data.type},${data.acc.toFixed(4)},${data.tilt.toFixed(4)},"${data.orbitPoints.join(' ')}"`;
-        if (writer) await writer.write(csvRow + '\n');
-        else recordedRows.push(csvRow);
+        recordedRows.push(csvRow);
     };
 
-    // --- CSV読み込み (Androidのタップ不可問題を回避) ---
-    if(loadCsvBtn) loadCsvBtn.addEventListener('click', async () => {
-        if ('showOpenFilePicker' in window) {
-            try {
-                const [fileHandle] = await window.showOpenFilePicker({
-                    types: [{ description: 'CSVファイル', accept: { 'text/csv': ['.csv'] } }],
-                    multiple: false
-                });
-                const file = await fileHandle.getFile();
-                const contents = await file.text();
-                parseAndLoadCsv(contents, file.name);
-            } catch (err) {
-                if (err.name !== 'AbortError') log(`CSV読込エラー: ${err.message}`);
-                else log("ファイル選択がキャンセルされました。");
+    // --- CSV読み込み (PC/Android両対応) ---
+    if(loadCsvBtn) loadCsvBtn.addEventListener('click', () => {
+        // Android/PC問わず、input[type=file]に統一
+        const input = document.createElement('input');
+        input.type = 'file';
+        // ★原因②対策: accept属性を削除し、すべてのファイルを選択可能にする
+        input.style.display = 'none';
+        document.body.appendChild(input);
+
+        input.onchange = e => {
+            const file = e.target.files[0];
+            if (document.body.contains(input)) document.body.removeChild(input);
+            if (!file) return;
+
+            // プログラム側で拡張子をチェック
+            if (!file.name.toLowerCase().endsWith('.csv')) {
+                log('エラー: .csv 形式のファイルを選択してください。');
+                return;
             }
-        } else {
-            // Android用：見えないinput要素をDOMに安全に追加して呼び出す
-            const input = document.createElement('input');
-            input.type = 'file';
-            // ★超重要: Androidの機種によっては.csv制限をかけるとファイルがグレーアウトするため、敢えて制限を外してすべてのファイルをタップ可能にする
-            input.style.display = 'none';
-            document.body.appendChild(input);
-
-            input.onchange = e => {
-                const file = e.target.files[0];
-                if (!file) {
-                    if (document.body.contains(input)) document.body.removeChild(input);
-                    return;
-                }
-                
-                // プログラム側でCSVファイルかどうかを判定
-                if (!file.name.toLowerCase().endsWith('.csv')) {
-                    log('エラー: 拡張子が .csv のファイルを選択してください。');
-                    if (document.body.contains(input)) document.body.removeChild(input);
-                    return;
-                }
-
-                const reader = new FileReader();
-                reader.onload = event => {
-                    parseAndLoadCsv(event.target.result, file.name);
-                    if (document.body.contains(input)) document.body.removeChild(input);
-                };
-                reader.readAsText(file);
+            
+            const reader = new FileReader();
+            reader.onload = event => {
+                parseAndLoadCsv(event.target.result, file.name);
             };
+            reader.readAsText(file, 'UTF-8');
+        };
+        
+        // ファイル選択がキャンセルされた場合の後始末
+        window.addEventListener('focus', () => {
+            setTimeout(() => {
+                if (document.body.contains(input)) {
+                    document.body.removeChild(input);
+                }
+            }, 1000);
+        }, { once: true });
 
-            // キャンセルして戻ってきた時のためのゴミ掃除（メモリリーク防止）
-            window.addEventListener('focus', () => {
-                setTimeout(() => {
-                    if (document.body.contains(input)) document.body.removeChild(input);
-                }, 1000);
-            }, { once: true });
-
-            input.click();
-        }
+        input.click();
     });
 
     function parseAndLoadCsv(contents, fileName) {
