@@ -2,7 +2,6 @@ document.addEventListener('DOMContentLoaded', () => {
     let device = null, notifyCharacteristic = null;
     let fileHandle = null, writer = null;
     let isRecording = false;
-    let recordedRows = []; // Android等、ストリームが使えない環境用のデータバッファ
 
     // UUID定義
     const SERVICE_UUID = "0000ffe5-0000-1000-8000-00805f9a34fb";
@@ -78,173 +77,103 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // 記録開始
     async function startRecording() {
-        const now = new Date();
-        const timestamp = `${now.getFullYear()}${(now.getMonth() + 1).toString().padStart(2, '0')}${now.getDate().toString().padStart(2, '0')}_${now.getHours().toString().padStart(2, '0')}${now.getMinutes().toString().padStart(2, '0')}${now.getSeconds().toString().padStart(2, '0')}`;
-        const fileName = `swing_log_${timestamp}.csv`;
+        try {
+            const now = new Date();
+            const timestamp = `${now.getFullYear()}${(now.getMonth() + 1).toString().padStart(2, '0')}${now.getDate().toString().padStart(2, '0')}_${now.getHours().toString().padStart(2, '0')}${now.getMinutes().toString().padStart(2, '0')}${now.getSeconds().toString().padStart(2, '0')}`;
+            const fileName = `swing_log_${timestamp}.csv`;
 
-        // デスクトップ版の保存ピッカーがサポートされているか確認
-        if ('showSaveFilePicker' in window) {
-            try {
-                fileHandle = await window.showSaveFilePicker({
-                    suggestedName: fileName,
-                    types: [{
-                        description: 'CSVファイル',
-                        accept: { 'text/csv': ['.csv'] },
-                    }],
-                });
-                writer = await fileHandle.createWritable();
-                await writer.write('time,type,accuracy,tilt,orbit_points\n');
-                
-                isRecording = true;
-                recordBtn.textContent = "記録終了";
-                recordBtn.style.backgroundColor = 'var(--record-color)';
-                log(`記録開始: ${fileHandle.name}`);
-            } catch (err) {
-                if (err.name !== 'AbortError') {
-                    log(`記録開始エラー: ${err.message}`);
-                } else {
-                    log("ファイル保存がキャンセルされました。");
-                }
-            }
-        } else {
-            // Android等の非対応ブラウザ用の代替保存処理 (オンメモリバッファ)
-            recordedRows = ['time,type,accuracy,tilt,orbit_points'];
+            fileHandle = await window.showSaveFilePicker({
+                suggestedName: fileName,
+                types: [{
+                    description: 'CSVファイル',
+                    accept: { 'text/csv': ['.csv'] },
+                }],
+            });
+
+            writer = await fileHandle.createWritable();
+            await writer.write('time,type,accuracy,tilt,orbit_points\n');
+            
             isRecording = true;
             recordBtn.textContent = "記録終了";
-            recordBtn.style.backgroundColor = 'var(--record-color)';
-            log("記録開始 (モバイル互換モード - 終了時にダウンロード保存されます)");
+            recordBtn.style.backgroundColor = 'var(--record-color)'; // 記録色を適用
+
+        } catch (err) {
+            if (err.name !== 'AbortError') {
+                log(`記録開始エラー: ${err.message}`);
+            } else {
+                log("ファイル保存がキャンセルされました。");
+            }
         }
     }
 
-    // 記録終了・書き出し
     async function stopRecording() {
+        if (writer) {
+            await writer.close();
+        }
+        writer = null;
+        fileHandle = null;
         isRecording = false;
         recordBtn.textContent = "記録開始";
-        recordBtn.style.backgroundColor = '';
-
-        if (writer) {
-            // デスクトップストリームを閉じる
-            await writer.close();
-            writer = null;
-            fileHandle = null;
-            log("記録を保存・終了しました。");
-        } else {
-            // Android等の代替保存処理 (Blobダウンロード)
-            if (recordedRows.length > 1) {
-                try {
-                    const csvContent = recordedRows.join('\n') + '\n';
-                    const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvContent], { type: 'text/csv;charset=utf-8;' });
-                    
-                    const link = document.createElement('a');
-                    const now = new Date();
-                    const timestamp = `${now.getFullYear()}${(now.getMonth() + 1).toString().padStart(2, '0')}${now.getDate().toString().padStart(2, '0')}_${now.getHours().toString().padStart(2, '0')}${now.getMinutes().toString().padStart(2, '0')}${now.getSeconds().toString().padStart(2, '0')}`;
-                    
-                    link.href = URL.createObjectURL(blob);
-                    link.download = `swing_log_${timestamp}.csv`;
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-                    
-                    log("記録データを「ダウンロード」に自動保存しました。");
-                } catch (e) {
-                    log(`保存エラー: ${e.message}`);
-                }
-            } else {
-                log("記録データがありません。");
-            }
-            recordedRows = [];
-        }
+        recordBtn.style.backgroundColor = ''; // デフォルト色に戻す
+        log("記録を終了しました。");
     }
 
     window.recordSwingData = async (data) => {
-        if (!isRecording) return;
-        const csvRow = `${data.time},${data.type},${data.acc.toFixed(4)},${data.tilt.toFixed(4)},"${data.orbitPoints.join(' ')}"`;
-        
-        if (writer) {
-            await writer.write(csvRow + '\n');
-        } else {
-            recordedRows.push(csvRow);
-        }
+        if (!isRecording || !writer) return;
+        const csvRow = `${data.time},${data.type},${data.acc.toFixed(4)},${data.tilt.toFixed(4)},"${data.orbitPoints.join(' ')}"\n`;
+        await writer.write(csvRow);
     };
 
-    // 履歴読み込み (Android互換対応)
     loadCsvBtn.addEventListener('click', async () => {
-        // デスクトップピッカー対応
-        if ('showOpenFilePicker' in window) {
-            try {
-                const [fileHandle] = await window.showOpenFilePicker({
-                    types: [{ description: 'CSVファイル', accept: { 'text/csv': ['.csv'] } }],
-                    multiple: false
-                });
-                const file = await fileHandle.getFile();
-                const contents = await file.text();
-                parseAndLoadCsv(contents, file.name);
-            } catch (err) {
-                if (err.name !== 'AbortError') {
-                    log(`CSV読込エラー: ${err.message}`);
-                } else {
-                    log("ファイル選択がキャンセルされました。");
-                }
-            }
-        } else {
-            // Androidなどの互換モード: 動的に通常ファイル入力要素を生成して呼び出し
-            const input = document.createElement('input');
-            input.type = 'file';
-            input.accept = '.csv, text/csv';
+        try {
+            const [fileHandle] = await window.showOpenFilePicker({
+                types: [{ description: 'CSVファイル', accept: { 'text/csv': ['.csv'] } }],
+                multiple: false
+            });
+            const file = await fileHandle.getFile();
+            const contents = await file.text();
             
-            input.onchange = e => {
-                const file = e.target.files[0];
-                if (!file) return;
-                
-                const reader = new FileReader();
-                reader.onload = event => {
-                    parseAndLoadCsv(event.target.result, file.name);
+            window.clearHistory();
+
+            const rows = contents.split('\n').filter(row => row.trim() !== '' && !row.startsWith('time'));
+            if (rows.length === 0) {
+                log('CSVにデータがありません。');
+                return;
+            }
+
+            const loadedDataForChart = [];
+            const today = new Date();
+
+            rows.forEach((row, index) => {
+                const columns = row.split(',');
+                const timeParts = columns[0].split(':');
+                today.setHours(timeParts[0], timeParts[1], timeParts[2]);
+
+                const swingData = {
+                    id: today.getTime() + index,
+                    timestamp: new Date(today.getTime()),
+                    time: columns[0],
+                    type: columns[1],
+                    acc: parseFloat(columns[2]),
+                    tilt: parseFloat(columns[3]),
+                    orbitPoints: columns[4] ? columns[4].replace(/"/g, '').split(' ') : []
                 };
-                reader.readAsText(file);
-            };
-            input.click();
+                window.addHistory(swingData);
+                loadedDataForChart.push(swingData);
+            });
+            
+            window.loadHistoryToChart(loadedDataForChart);
+            log(`${file.name} を読み込み、${rows.length}件の履歴を表示しました。`);
+
+        } catch (err) {
+            if (err.name !== 'AbortError') {
+                log(`CSV読込エラー: ${err.message}`);
+            } else {
+                log("ファイル選択がキャンセルされました。");
+            }
         }
     });
-
-    // CSV解析とUI展開
-    function parseAndLoadCsv(contents, fileName) {
-        window.clearHistory();
-
-        const rows = contents.split('\n').filter(row => row.trim() !== '' && !row.startsWith('time'));
-        if (rows.length === 0) {
-            log('CSVにデータがありません。');
-            return;
-        }
-
-        const loadedDataForChart = [];
-        const today = new Date();
-
-        rows.forEach((row, index) => {
-            const columns = row.split(',');
-            if (columns.length < 4) return;
-            const timeParts = columns[0].split(':');
-            if (timeParts.length >= 3) {
-                today.[...](asc_slot://start-slot-9)setHours(timeParts[0], timeParts[...](asc_slot://start-slot-10), timeParts);
-            }
-
-            const swingData = {
-                id: today.getTime() + index,
-                timestamp: new Date(today.[...](asc_slot://start-slot-12)getTime()),
-                time: columns[0],
-                type: columns[...](asc_slot://start-slot-13),
-                acc: parseFloat(columns[...](asc_slot://start-slot-14)),
-                tilt: parseFloat(columns[...](asc_slot://start-slot-15)),
-                orbitPoints: columns ? columns.replace(/"/g, '').split(' ') : []
-            };
-            window.addHistory(swingData);
-            loadedDataForChart.push(swingData);
-        });
-        
-        window.loadHistoryToChart(loadedDataForChart);
-        log(`${fileName} を読み込み、${rows.length}件の履歴を表示しました。`);
-    }
     
     clearHistoryBtn.addEventListener('click', () => {
         if (confirm('すべての履歴を削除しますか？')) {
