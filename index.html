@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>卓球スイング判定 (Android版)</title>
+    
+    <!-- PWA設定 -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#121212">
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js').catch(err => console.log('PWA ServiceWorker 登録失敗', err));
+            });
+        }
+    </script>
+    <!-- Chart.jsライブラリ -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+
+    <!-- CSSファイルの読み込み -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="dark-mode">
+    <div class="container">
+        <!-- 接続UI -->
+        <div class="panel connection-panel">
+            <div class="connection-controls">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <h2 style="margin: 0; border: none;">接続コントロール</h2>
+                    <div class="row">
+                        <button id="theme-toggle">🌓</button>
+                        <span id="statusText" class="status-badge">未接続</span>
+                    </div>
+                </div>
+                <div class="row button-row" style="margin-top: 8px;">
+                    <button id="connectBtn" class="primary">センサー接続</button>
+                    <button id="disconnectBtn">切断</button>
+                    <button id="recordBtn">記録開始</button>
+                    <button id="loadCsvBtn">履歴読込</button>
+                </div>
+                <div id="log-line" class="log-line">PWA起動完了。センサーと接続してください。</div>
+            </div>
+            <!-- 生データパネル -->
+            <div class="live-data-panel">
+                <h2 style="margin: 0; border: none;">生データ</h2>
+                <div id="live-data-container">待機中...</div>
+            </div>
+        </div>
+
+        <!-- 可視化UI -->
+        <div class="panel visualization-panel">
+            <div class="vis-layout">
+                <!-- 左側 -->
+                <div class="vis-left">
+                    <div class="threshold-controls">
+                        <!-- ★★★ 1行ずつのレイアウトに戻す ★★★ -->
+                        <div class="algo-selection">
+                            <label>検出モード:</label>
+                            <div class="radio-group">
+                                <label><input type="radio" name="algorithm" value="basic" checked> 標準</label>
+                                <label><input type="radio" name="algorithm" value="advanced"> 高精度</label>
+                            </div>
+                        </div>
+                        <div class="threshold-row">
+                            <label for="swingThresholdSlider">判定閾値 (G)</label>
+                            <input type="range" id="swingThresholdSlider" min="1.0" max="15.0" step="0.1" value="3.0">
+                            <span id="swingThresholdVal">3.0</span>
+                        </div>
+                        <div class="threshold-row">
+                            <label for="accHighlightSlider">加速度ハイライト</label>
+                            <input type="range" id="accHighlightSlider" min="1.0" max="15.0" step="0.1" value="8.0">
+                            <span id="accHighlightVal">8.0</span>
+                        </div>
+                        <div class="threshold-row">
+                            <label for="angleHighlightSlider">傾斜角ハイライト</label>
+                            <input type="range" id="angleHighlightSlider" min="0" max="90" step="1" value="45">
+                            <span id="angleHighlightVal">45</span>
+                        </div>
+                    </div>
+                    <div class="impact-stats">
+                        <div id="swing-indicators">
+                            <div id="fh-indicator" class="indicator">FH</div>
+                            <div id="bh-indicator" class="indicator">BH</div>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">打球面:</span>
+                            <div class="stat-visual racket-container">
+                                <svg id="racket-visual" viewBox="0 0 100 100" height="50" style="fill: var(--text-muted);">
+                                    <circle cx="50" cy="35" r="35" />
+                                    <rect x="42" y="68" width="16" height="32" rx="4" />
+                                </svg>
+                                <span id="racket-text">--</span>
+                            </div>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">最大加速度:</span>
+                             <div class="stat-visual bar-wrapper">
+                                <span id="peakAccValue" class="bar-value">0.00g</span>
+                                <div class="bar-container"><div id="peakAccBar" class="bar"></div></div>
+                            </div>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">傾斜角度:</span>
+                            <div class="stat-visual">
+                                <div class="gauge-wrapper">
+                                    <svg viewBox="0 0 130 100">
+                                        <path d="M10,10 L10,90 L90,90" stroke="var(--border-color)" stroke-width="8" fill="none" stroke-linecap="round"/>
+                                        <path id="angle-arc" d="" fill="none" stroke-width="8" opacity="0.3" style="transition: d 0.2s ease-out, stroke 0.2s;" />
+                                        <line id="angle-needle" x1="10" y1="90" x2="90" y2="90" stroke-linecap="round"/>
+                                        <text id="angle-text" x="120" y="75" text-anchor="middle" dominant-baseline="middle">0°</text>
+                                    </svg>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- 中央: スイング軌跡 & 分布図 -->
+                <div class="vis-center">
+                     <div class="vis-svg-container">
+                        <div class="vis-title">スイング軌跡</div>
+                        <div class="vis-content-wrapper">
+                            <svg id="orbit-plot" viewBox="-16 -16 32 32">
+                                <path d="M-16,0 L16,0 M0,-16 L0,16" stroke="var(--svg-grid)" stroke-width="0.3"/>
+                                <circle cx="0" cy="0" r="8" stroke="var(--svg-grid)" stroke-width="0.2" fill="none" stroke-dasharray="1 1" />
+                                <circle cx="0" cy="0" r="16" stroke="var(--svg-grid)" stroke-width="0.2" fill="none" />
+                                <polyline id="orbit-path" fill="none" stroke-width="0.8" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                            <div class="orbit-label x-axis">X: 前後</div>
+                            <div class="orbit-label y-axis">Y: 左右</div>
+                        </div>
+                     </div>
+                     <div class="vis-chart-container">
+                        <div class="vis-title">加速度-角度 分布図</div>
+                        <div class="vis-content-wrapper">
+                            <canvas id="distribution-chart"></canvas>
+                        </div>
+                     </div>
+                </div>
+                <!-- 右側: 履歴 -->
+                <div class="vis-right">
+                    <div class="history-title-container">
+                        <div class="history-title">検出履歴</div>
+                        <button id="clearHistoryBtn" class="tertiary">全削除</button>
+                    </div>
+                    <div class="history-list" id="history-list"></div>
+                    <img src="logo.svg" alt="logo" class="panel-logo">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScriptファイルの読み込み (順序が重要です) -->
+    <script src="swing_logic.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
