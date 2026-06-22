@@ -1,0 +1,17 @@
+{
+  "short_name": "RunForm",
+  "name": "ランニングフォーム解析 プロ",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/1950/1950581.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "./index.html",
+  "background_color": "#121212",
+  "theme_color": "#1976d2",
+  "display": "standalone",
+  "orientation": "portrait"
+}
