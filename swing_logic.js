@@ -30,7 +30,7 @@
     const colorGood = '#28a745', colorWarn = '#ffc107', colorBad = '#dc3545';
     let adviceTimer = 0;
 
-    // 円グラフ内に文字を描画するカスタムプラグイン (文字を極小化)
+    // 円グラフ内に文字を描画するカスタムプラグイン (文字を読みやすく拡大)
     const pieTextPlugin = {
         id: 'pieText',
         afterDraw: (chart) => {
@@ -47,14 +47,14 @@
                     
                     ctx.save();
                     ctx.fillStyle = '#ffffff';
-                    ctx.font = 'bold 7px sans-serif'; 
+                    ctx.font = 'bold 10px sans-serif'; 
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'middle';
                     
                     const center = sector.tooltipPosition();
                     const labels = ['Good', 'Warn', 'Bad'];
-                    ctx.fillText(labels[j], center.x, center.y - 4);
-                    ctx.fillText(pct + '%', center.x, center.y + 4);
+                    ctx.fillText(labels[j], center.x, center.y - 6);
+                    ctx.fillText(pct + '%', center.x, center.y + 6);
                     ctx.restore();
                 });
             });
@@ -136,10 +136,10 @@
             options: { responsive: true, maintainAspectRatio: false, layout: { padding: 0 }, scales: { y: { min: 0, max: 15, title: {display: true, text: '|°|', font:{size:8}, padding:0}, ticks: {font:{size:8}, padding:2} }, x: {ticks:{font:{size:8}}} }, plugins: { legend: { display: true, position: 'top', labels: { boxWidth: 8, padding: 4, font: {size: 8} } } } }
         });
 
-        const pieOpts = { responsive: true, maintainAspectRatio: false, layout: { padding: 0 }, plugins: { legend: { display: false }, tooltip: { enabled: false } }, cutout: '60%' };
-        pitchPie = new Chart(document.getElementById('pitch-pie').getContext('2d'), { type: 'doughnut', data: { labels: ['G', 'W', 'B'], datasets: [{ data: [0,0,0], backgroundColor: [colorGood, colorWarn, colorBad], borderWidth: 0 }] }, options: pieOpts });
-        distPie = new Chart(document.getElementById('dist-pie').getContext('2d'), { type: 'doughnut', data: { labels: ['G', 'W', 'B'], datasets: [{ data: [0,0,0], backgroundColor: [colorGood, colorWarn, colorBad], borderWidth: 0 }] }, options: pieOpts });
-        dropPie = new Chart(document.getElementById('drop-pie').getContext('2d'), { type: 'doughnut', data: { labels: ['G', 'W', 'B'], datasets: [{ data: [0,0,0], backgroundColor: [colorGood, colorWarn, colorBad], borderWidth: 0 }] }, options: pieOpts });
+        const pieOpts = { responsive: true, maintainAspectRatio: false, layout: { padding: 0 }, plugins: { pieTextPlugin, legend: { display: false }, tooltip: { enabled: false } }, cutout: '50%' };
+        pitchPie = new Chart(document.getElementById('pitch-pie').getContext('2d'), { type: 'doughnut', plugins: [pieTextPlugin], data: { labels: ['Good', 'Warn', 'Bad'], datasets: [{ data: [0,0,0], backgroundColor: [colorGood, colorWarn, colorBad], borderWidth: 0 }] }, options: pieOpts });
+        distPie = new Chart(document.getElementById('dist-pie').getContext('2d'), { type: 'doughnut', plugins: [pieTextPlugin], data: { labels: ['Good', 'Warn', 'Bad'], datasets: [{ data: [0,0,0], backgroundColor: [colorGood, colorWarn, colorBad], borderWidth: 0 }] }, options: pieOpts });
+        dropPie = new Chart(document.getElementById('drop-pie').getContext('2d'), { type: 'doughnut', plugins: [pieTextPlugin], data: { labels: ['Good', 'Warn', 'Bad'], datasets: [{ data: [0,0,0], backgroundColor: [colorGood, colorWarn, colorBad], borderWidth: 0 }] }, options: pieOpts });
 
         // --- 事後分析用グラフ ---
         analysisTimelineChart = new Chart(document.getElementById('analysis-timeline-chart'), {
@@ -308,10 +308,9 @@
         const pitchDisplay = document.getElementById('pitchValue');
         let pStatus = 'warn';
         if (pitchDisplay) {
-            pitchDisplay.textContent = currentPitch > 0 ? currentPitch : '---';
             pStatus = currentPitch > 0 ? getStatus(currentPitch, pitchMin, pitchMax, 10) : 'warn';
             
-            // ★不具合修正箇所: card-pitch の有無を確認して色分けし、テキストに spm 値をしっかりと流し込む
+            // ピッチの巨大カードを更新
             const pCard = document.getElementById('card-pitch');
             if (pCard) {
                 pCard.className = `metric-card ${pStatus}`;
@@ -371,7 +370,7 @@
         
         if(typeof window.recordSwingData === 'function') window.recordSwingData(stepData);
 
-        const pStatus = document.getElementById('pitchValue').className.includes('good') ? 'good' : document.getElementById('pitchValue').className.includes('bad') ? 'bad' : 'warn';
+        const pStatus = document.getElementById('card-pitch').className.includes('good') ? 'good' : document.getElementById('card-pitch').className.includes('bad') ? 'bad' : 'warn';
         statsCount.pitch[pStatus]++;
         pitchPie.data.datasets[0].data = [statsCount.pitch.good, statsCount.pitch.warn, statsCount.pitch.bad];
         pitchPie.update('none');
@@ -511,7 +510,7 @@
         if(minA === Infinity) { minA = 0; maxA = 0; }
         if(minT === Infinity) { minT = 0; maxT = 0; }
 
-        // バッジをテーブル形式に変更
+        // テーブル形式のバッジ
         const statsHtml = `
             <table class="analysis-table">
                 <thead><tr><th>項目</th><th>平均</th><th>最小</th><th>最大</th></tr></thead>
@@ -524,37 +523,54 @@
         `;
         document.getElementById('analysis-stats').innerHTML = statsHtml;
 
-        // データに基づくテキスト生成
-        let text = `【データから読み解くフォーム分析】\n`;
+        // ★高度なデータ分析テキスト生成★
+        let text = `【データから読み解く詳細フォーム分析】\n`;
         
         const half = Math.floor(allStepsData.length / 2);
         if (half > 10) {
             const tilt1 = allStepsData.slice(0, half).reduce((s,d)=>s+d.tilt,0)/half;
             const tilt2 = allStepsData.slice(half).reduce((s,d)=>s+d.tilt,0)/half;
-            text += `\n[体幹の維持（疲労度）]\n`;
-            if (tilt1 - tilt2 > 2) text += `・後半にかけて前傾が平均 ${(tilt1-tilt2).toFixed(1)}° 減少しています。疲労により体が起き上がっているサインです。意識して前傾を保ちましょう。\n`;
-            else if (tilt2 - tilt1 > 2) text += `・後半にかけて前傾が平均 ${(tilt2-tilt1).toFixed(1)}° 増加しています。前のめりになりすぎないよう体幹で支える意識を。\n`;
-            else text += `・前後半で前傾姿勢が安定してキープされています。素晴らしい体幹の強さです。\n`;
+            const pitch1 = allStepsData.slice(0, half).reduce((s,d)=>s+d.pitch,0)/half;
+            const pitch2 = allStepsData.slice(half).reduce((s,d)=>s+d.pitch,0)/half;
+
+            text += `\n[1. 体幹の維持と疲労度]\n`;
+            if (tilt1 - tilt2 > 2) {
+                text += `後半にかけて前傾が平均 ${(tilt1-tilt2).toFixed(1)}° 減少しています。疲労により体が起き上がり、腰が落ちたフォームになっている可能性があります。腰が高く保たれるよう、目線を下げずに遠くを見る意識を持ちましょう。体幹トレーニングを取り入れることで後半の落ち込みを予防できます。\n`;
+            } else if (tilt2 - tilt1 > 2) {
+                text += `後半にかけて前傾が平均 ${(tilt2-tilt1).toFixed(1)}° 増加しています。前のめりになりすぎるとブレーキがかかり、太もも前側への負担が増加します。胸を張り、重心の真下で着地するよう心掛けてください。\n`;
+            } else {
+                text += `前後半で前傾姿勢が安定してキープされています（変動 ${(Math.abs(tilt1-tilt2)).toFixed(1)}°）。素晴らしい体幹の強さであり、長距離でも効率的な走りが期待できます。\n`;
+            }
+
+            if(pitch1 - pitch2 > 3) {
+                 text += `また、後半でピッチが ${(pitch1-pitch2).toFixed(0)} spm 低下しています。足の回転が遅れると接地時間が延び、着地衝撃が増加する原因になります。疲れた時こそ腕振りを意識し、リズムを保つよう工夫しましょう。\n`;
+            }
         }
 
         const r = calcCorrelation(tDataCorrelation);
-        text += `\n[ピッチと衝撃の相関 (R=${r.toFixed(2)})]\n`;
-        if (r < -0.3) text += `・ピッチと衝撃に強い「負の相関」があります。ピッチを上げるほど足への負担（衝撃）が減る理想的な走り方ができています。\n`;
-        else if (r > 0.3) text += `・ピッチを上げると衝撃も上がってしまう傾向があります。ストライドを無理に伸ばす力任せな走りになっている可能性があります。\n`;
-        else text += `・ピッチの増減による衝撃の変化が少ないです。一定の衝撃で安定して走れています。\n`;
+        text += `\n[2. ピッチと着地衝撃の相関 (R=${r.toFixed(2)})]\n`;
+        if (r <= -0.3) {
+            text += `ピッチと衝撃に良い「負の相関」が見られます。ピッチを上げることで、一歩あたりの着地衝撃を効果的に分散・軽減できています。この調子で、ペースを上げたい時はストライドを無理に伸ばすのではなく、ピッチの回転数でコントロールする意識を続けましょう。\n`;
+        } else if (r >= 0.3) {
+            text += `ピッチが上がると着地衝撃も大きくなる傾向にあります。ペースを上げる際に上に跳ねるような走り（上下動の増加）や、力任せに地面を蹴っている可能性があります。着地は柔らかく、地面を「押す」のではなく「転がす」イメージを持ちましょう。\n`;
+        } else {
+            text += `ピッチの変動に対する着地衝撃の変化が少ない状態です。安定した足運びができていると言えますが、もし衝撃値自体が高い(2.5G以上など)場合は、シューズのクッション性を見直すか、足裏全体でフラットに接地する意識を持つと改善されます。\n`;
+        }
 
-        text += `\n[骨盤の左右バランス]\n`;
+        text += `\n[3. 骨盤の左右バランスと着地特性]\n`;
         const diff = Math.abs(avgLeft - avgRight);
         if (diff > 1.5) {
             const heavySide = avgLeft > avgRight ? '右足' : '左足';
-            text += `・${heavySide}着地時の沈み込みが ${diff.toFixed(1)}° 大きいです。筋力差やクセがあるため、片足に負荷が集中している可能性があります。\n`;
+            const weakSide = avgLeft > avgRight ? '左' : '右';
+            text += `${heavySide}着地時の沈み込みが ${diff.toFixed(1)}° 大きくなっています。骨盤を支える筋力に左右差があるか、片足に体重を乗せすぎるクセがあります。この状態が続くと${heavySide}の膝や腰に故障のリスクが高まります。普段の生活で${weakSide}側の筋力強化を意識し、左右均等に体重を乗せる感覚を養いましょう。\n`;
         } else {
-            text += `・左右の沈み込みバランスは非常に良好（均等）です。故障しにくい理想的な状態です。\n`;
+            text += `左右の沈み込みバランスは非常に良好（左右差 ${diff.toFixed(1)}°）です。両足で均等に衝撃を吸収できており、故障しにくい理想的なフォームと言えます。\n`;
         }
-        
-        text += `\n------------------------\n`;
-        text += `【スコア計算式】\n`;
-        text += `1歩ごとに衝撃(33点)、前傾(33点)、左右ブレ(34点)を適正範囲(Good=満点, Warn=半減, Bad=0)で評価し、全歩数の平均を算出しています。`;
+
+        text += `\n[4. 総合的な改善ポイント]\n`;
+        if (avgScore >= 80) text += "総じて、ランニングエコノミーが非常に高く、ケガのリスクも低い理想的な走りです。現在のフォームを体に覚え込ませてください。";
+        else if (avgScore >= 60) text += "全体的にまとまっていますが、一部の指標に負担が集中しています。上記の改善ポイントを1回のランニングにつき1つずつ意識して修正していきましょう。";
+        else text += "着地衝撃やバランスの崩れが大きく、ケガのリスクが高い状態です。まずはスピードを落とし、ピッチを180前後に保ちながら、体の真下で優しく着地するフォーム作りに専念することをお勧めします。";
 
         document.getElementById('analysis-text').innerText = text;
 
@@ -596,10 +612,10 @@
             const el = document.getElementById(id);
             if(el) el.className = 'metric-card';
         });
-        document.getElementById('pitchValue').textContent = '---';
-        document.getElementById('peakAccValue').textContent = '0.00';
-        document.getElementById('tiltValue').textContent = '0.0';
-        document.getElementById('dropValue').textContent = '0.0';
+        const vPitch = document.getElementById('pitchValue'); if(vPitch) vPitch.textContent = '---';
+        const vAcc = document.getElementById('peakAccValue'); if(vAcc) vAcc.textContent = '0.00';
+        const vTilt = document.getElementById('tiltValue'); if(vTilt) vTilt.textContent = '0.0';
+        const vDrop = document.getElementById('dropValue'); if(vDrop) vDrop.textContent = '0.0';
         
         ['pitch', 'form', 'drop'].forEach(k => { statsCount[k] = {good:0, warn:0, bad:0}; });
         pitchPie.data.datasets[0].data = [0,0,0]; pitchPie.update();

@@ -60,7 +60,7 @@ input[type="number"] { background: var(--item-bg); color: var(--text-color); bor
 .threshold-row label { font-weight: bold; white-space: nowrap; }
 .input-group { display: flex; gap: 2px; align-items: center; }
 
-/* ランニング中特化 タイル型UI */
+/* ランニング中特化 タイル型UI - 文字サイズ最大化 */
 .running-metrics { display: flex; flex-direction: column; gap: 4px; flex: 1; min-height: 0; }
 .summary-metrics { display: flex; justify-content: space-between; background: var(--sub-panel-bg); padding: 4px 8px; border-radius: 4px; border: 1px solid var(--border-color); }
 .sm-label { font-size: 9px; color: var(--text-muted); }
@@ -70,9 +70,11 @@ input[type="number"] { background: var(--item-bg); color: var(--text-color); bor
 .metric-card.good { background-color: var(--color-good); }
 .metric-card.warn { background-color: var(--color-warn); }
 .metric-card.bad { background-color: var(--color-bad); }
-.mc-name { font-size: 10px; opacity: 0.9; font-weight: bold; }
-.mc-val { font-size: 26px; font-weight: bold; line-height: 1.1; font-family: monospace; margin: 2px 0;}
-.mc-unit { font-size: 9px; opacity: 0.9; }
+
+.mc-name { font-size: 13px; opacity: 0.9; font-weight: bold; }
+/* 数値を枠内いっぱいに拡大 (clampで自動調整) */
+.mc-val { font-size: clamp(28px, 4.5vw, 46px); font-weight: bold; line-height: 1.0; font-family: monospace; margin: 6px 0;}
+.mc-unit { font-size: 14px; opacity: 0.9; font-weight: bold;}
 
 .val-good { color: var(--color-good) !important; } .val-warn { color: var(--color-warn) !important; } .val-bad { color: var(--color-bad) !important; }
 
@@ -95,19 +97,20 @@ input[type="number"] { background: var(--item-bg); color: var(--text-color); bor
 .vis-content-wrapper { position: relative; flex-grow: 1; display: flex; justify-content: center; align-items: center; padding: 2px;}
 .vis-content-wrapper canvas { max-width: 100%; max-height: 100%; position: absolute;}
 
-.pie-wrapper { width: 40px; display: flex; flex-direction: column; align-items: center; justify-content: center; flex-shrink: 0; border-left: 1px dashed var(--border-color); position: relative; }
-.pie-wrapper canvas { max-width: 30px !important; max-height: 30px !important; }
-.pie-label { font-size: 8px; color: var(--text-muted); margin-top: 1px; }
+/* 円グラフのサイズを2倍に拡大 */
+.pie-wrapper { width: 80px; display: flex; flex-direction: column; align-items: center; justify-content: center; flex-shrink: 0; border-left: 1px dashed var(--border-color); position: relative; padding-left: 6px;}
+.pie-wrapper canvas { max-width: 65px !important; max-height: 65px !important; }
+.pie-label { font-size: 10px; color: var(--text-muted); margin-top: 2px; }
 
 /* ----------------事後分析レイアウト---------------- */
 .analysis-layout { display: flex; flex-direction: row; gap: 6px; flex: 1; height: 100%; width: 100%; overflow: hidden; padding: 0;}
 .analysis-main-content { flex: 3.5; display: flex; flex-direction: column; gap: 4px; min-width: 0; overflow-y: auto; }
-.analysis-sidebar { flex: 1.5; min-width: 150px; background: var(--sub-panel-bg); border: 1px solid var(--border-color); border-radius: 4px; padding: 6px; overflow-y: auto; }
+.analysis-sidebar { flex: 1.5; min-width: 150px; background: var(--sub-panel-bg); border: 1px solid var(--border-color); border-radius: 4px; padding: 8px; overflow-y: auto; }
 
 @media (max-aspect-ratio: 1/1) {
     .analysis-layout { flex-direction: column; }
     .analysis-main-content { flex: 1; overflow-y: visible; }
-    .analysis-sidebar { flex: none; max-height: 180px; }
+    .analysis-sidebar { flex: none; max-height: 250px; }
 }
 
 .analysis-summary { display: flex; gap: 12px; align-items: center; background: var(--sub-panel-bg); padding: 8px; border-radius: 4px; border: 1px solid var(--border-color); flex-shrink: 0; }
@@ -119,14 +122,14 @@ input[type="number"] { background: var(--item-bg); color: var(--text-color); bor
 .analysis-text-area { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
 
 /* テーブル形式のスタイル */
-.analysis-table { width: 100%; border-collapse: collapse; font-size: 9px; color: var(--text-color); margin-top: 2px;}
-.analysis-table th, .analysis-table td { border: 1px solid var(--border-color); padding: 2px 4px; text-align: center; }
+.analysis-table { width: 100%; border-collapse: collapse; font-size: 10px; color: var(--text-color); margin-top: 2px;}
+.analysis-table th, .analysis-table td { border: 1px solid var(--border-color); padding: 3px 4px; text-align: center; }
 .analysis-table th { background-color: var(--bar-bg); font-weight: bold; }
 
-.analysis-text { font-size: 10px; line-height: 1.4; color: var(--text-color); white-space: pre-wrap;}
+.analysis-text { font-size: 11px; line-height: 1.5; color: var(--text-color); white-space: pre-wrap;}
 
 .analysis-charts-grid { display: grid; gap: 4px; flex: 1; min-height: 0; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); flex-shrink: 0; padding-bottom: 4px; }
-.analysis-chart-cell { height: 150px; min-height: 0; display: flex; flex-direction: column; padding:0;}
+.analysis-chart-cell { height: 160px; min-height: 0; display: flex; flex-direction: column; padding:0;}
 
 @media (min-aspect-ratio: 1/1) {
     .analysis-charts-grid { grid-template-columns: repeat(4, 1fr); grid-template-rows: 1fr 1fr; }
